@@ -1,7 +1,7 @@
 #!/bin/bash
 # Start the Claude Code session of one claude-sessions tab (run by the Windows app through wsl.exe).
 # Resumes the session when a transcript of it exists, else creates it under the same id.
-# Exports CLAUDE_SESSIONS_TAB and CLAUDE_SESSIONS_TAB_PID for the session-registry hook; both execs
+# Exports CLAUDE_SESSIONS_TAB and CLAUDE_SESSIONS_TAB_PID for claude-sessions-hook.sh; both execs
 # keep this PID, so claude itself runs with PID $CLAUDE_SESSIONS_TAB_PID.
 # Usage: claude-sessions-tab <tab_uuid> <session_uuid>
 uuid='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'

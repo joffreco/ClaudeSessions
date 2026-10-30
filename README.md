@@ -24,7 +24,7 @@ The terminal is the Windows Terminal WPF control (same renderer as Windows Termi
 
 A tab resumes its session when a transcript of it exists (`~/.claude/projects/*/<session>.jsonl`), else it starts a new session under the same id. The tab title is the title the session sets, else the folder name. As in Windows Terminal, the tab shows the state mark Claude Code puts in front of its title: a green ✳ while the session waits for you, a spinner while it works. The mark is not saved, so a tab whose session has not started yet shows the title alone. The selected tab's title is in bold.
 
-The app learns about `/clear`, `/resume` and forks from the [session-registry hook](https://github.com/MCJ-CONSEIL/comutils/blob/staging/docs/hooks/session-registry.md), which records the session of each tab in `~/.claude/session-tabs/<tab_id>.json`. The app reads these records every 30 seconds and when a window closes or the app quits, waiting at most 2 seconds; when a read fails, the tab keeps its last known session.
+The app learns about `/clear`, `/resume` and forks from the `SessionStart` hook `wsl/claude-sessions-hook.sh`, which records the session of each tab in `~/.claude/session-tabs/<tab_id>.json`. The app reads these records every 30 seconds and when a window closes or the app quits, waiting at most 2 seconds; when a read fails, the tab keeps its last known session.
 
 ## Keyboard Shortcuts
 
@@ -49,7 +49,6 @@ Every other key goes to the session.
 - Windows 10 1809 or later, x64, with WSL and the distribution that runs Claude Code.
 - Windows Desktop Runtime 10: `winget install Microsoft.DotNet.DesktopRuntime.10`.
 - In WSL: the .NET 10 SDK, `curl`, `openssl`, `unzip`, `jq` (for the hook), and `claude` on the login shell's `PATH`.
-- The [session-registry hook](https://github.com/MCJ-CONSEIL/comutils/blob/staging/docs/hooks/session-registry.md) installed, so the app follows `/clear` and `/resume`.
 
 ## File Location
 
@@ -90,11 +89,13 @@ dotnet format ClaudeSessions.slnx --verify-no-changes
 
 ## Installation
 
-1. Link the launcher into WSL:
+1. Set up the WSL side:
 
    ```bash
-   ln -s "$PWD/wsl/claude-sessions-tab" ~/.local/bin/claude-sessions-tab
+   ./wsl/setup.sh
    ```
+
+   It links the launcher into `~/.local/bin` and the hook into `~/.claude/hooks`, and registers the hook for `SessionStart` in `~/.claude/settings.json`, keeping the previous file as `settings.json.bak`. Running it again changes nothing.
 
 2. From Windows PowerShell, run the installer:
 
@@ -104,7 +105,7 @@ dotnet format ClaudeSessions.slnx --verify-no-changes
 
    It copies `publish/` to `%LOCALAPPDATA%\Programs\ClaudeSessions` and creates a Start menu shortcut and a `shell:startup` shortcut. `-NoStartup` skips the second one; `-Source <folder>` installs from another folder. Quit the app before reinstalling.
 
-If `claude-restore` (which reopens the `session-registry` sessions in Windows Terminal) also starts at logon, the order of the two is random and `claude-restore` stops as soon as a `claude` process runs. Keep only one of them at logon.
+If another tool also reopens Claude sessions at logon (such as `claude-restore` in Windows Terminal), keep only one of them at logon.
 
 ## Configuration
 
@@ -137,6 +138,6 @@ shows one record per tab that has started.
 ## Troubleshooting
 
 - **A tab shows « Session terminée »**: the launcher or `claude` failed. A deleted directory makes `wsl --cd` fail; choose **Nouvelle session ici** or close the tab.
-- **Tabs never follow `/clear`**: the hook is missing or is an older version. Check that `~/.claude/hooks/session-registry.sh` points to the comutils version that has the `CLAUDE_SESSIONS_TAB` branch and that `~/.claude/session-tabs/` fills up.
+- **Tabs never follow `/clear`**: the hook is missing or is an older version. Run `./wsl/setup.sh` again, restart the sessions, and check that `~/.claude/session-tabs/` fills up.
 - **A `/clear` done just before a shutdown is lost**: the app does not read WSL at shutdown; the tab resumes the previous session.
 - **Nothing happens on a second launch**: the running instance comes to the front instead; one instance runs per Windows session.

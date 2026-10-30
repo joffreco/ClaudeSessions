@@ -9,7 +9,7 @@ using ClaudeSessions.Core.Interfaces;
 namespace ClaudeSessions.Adapters;
 
 /// <summary>
-/// Reads the records the session-registry hook writes in ~/.claude/session-tabs, one file per tab,
+/// Reads the records claude-sessions-hook.sh writes in ~/.claude/session-tabs, one file per tab,
 /// reached from Windows through \\wsl.localhost.
 /// </summary>
 public sealed class HookFileTabSessionSource : ITabSessionSource

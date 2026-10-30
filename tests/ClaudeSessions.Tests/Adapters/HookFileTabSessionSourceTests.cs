@@ -8,7 +8,7 @@ using Xunit;
 
 namespace ClaudeSessions.Tests.Adapters;
 
-/// <summary>Reading the records the session-registry hook writes for each tab.</summary>
+/// <summary>Reading the records claude-sessions-hook.sh writes for each tab.</summary>
 public sealed class HookFileTabSessionSourceTests
 {
     private static readonly TabId Tab = new(Guid.Parse("11111111-2222-3333-4444-555555555555"));

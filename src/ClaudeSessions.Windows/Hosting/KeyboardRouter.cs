@@ -1,0 +1,120 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Windows;
+using System.Windows.Input;
+using System.Windows.Interop;
+using ClaudeSessions.Core.Application;
+using ClaudeSessions.Windows.Interop;
+using ClaudeSessions.Windows.Views;
+
+namespace ClaudeSessions.Windows.Hosting;
+
+/// <summary>
+/// Catches the application shortcuts, and Ctrl+wheel for the zoom, before the terminal sees them:
+/// the terminal is a native child window, so WPF bindings never fire while it has the focus. Also
+/// sends the other wheel messages to the window under the mouse, as Windows Terminal does, so that an
+/// inactive window scrolls without a click, and rescales them to the lines per notch chosen in the menu.
+/// </summary>
+internal sealed class KeyboardRouter : IDisposable
+{
+    private static readonly Dictionary<(Key Key, ModifierKeys Modifiers), AppCommand> Shortcuts = new()
+    {
+        [(Key.T, ModifierKeys.Control | ModifierKeys.Shift)] = AppCommand.NewTab,
+        [(Key.O, ModifierKeys.Control | ModifierKeys.Shift)] = AppCommand.NewTabIn,
+        [(Key.W, ModifierKeys.Control | ModifierKeys.Shift)] = AppCommand.CloseTab,
+        [(Key.R, ModifierKeys.Control | ModifierKeys.Shift)] = AppCommand.ReopenClosedTab,
+        [(Key.N, ModifierKeys.Control | ModifierKeys.Shift)] = AppCommand.NewWindow,
+        [(Key.Tab, ModifierKeys.Control)] = AppCommand.NextTab,
+        [(Key.Tab, ModifierKeys.Control | ModifierKeys.Shift)] = AppCommand.PreviousTab,
+        [(Key.C, ModifierKeys.Control | ModifierKeys.Shift)] = AppCommand.Copy,
+        [(Key.V, ModifierKeys.Control | ModifierKeys.Shift)] = AppCommand.Paste,
+        [(Key.Enter, ModifierKeys.None)] = AppCommand.ResumeFailed,
+        [(Key.OemPlus, ModifierKeys.Control)] = AppCommand.ZoomIn,
+        [(Key.Add, ModifierKeys.Control)] = AppCommand.ZoomIn,
+        [(Key.OemMinus, ModifierKeys.Control)] = AppCommand.ZoomOut,
+        [(Key.Subtract, ModifierKeys.Control)] = AppCommand.ZoomOut,
+        [(Key.D0, ModifierKeys.Control)] = AppCommand.ResetZoom,
+        [(Key.NumPad0, ModifierKeys.Control)] = AppCommand.ResetZoom,
+    };
+
+    private readonly WheelScrollService _wheel;
+
+    /// <summary>Starts watching the keyboard and wheel messages of the UI thread.</summary>
+    /// <param name="wheel">Lines per wheel notch.</param>
+    public KeyboardRouter(WheelScrollService wheel)
+    {
+        _wheel = wheel;
+        ComponentDispatcher.ThreadPreprocessMessage += OnPreprocessMessage;
+    }
+
+    /// <summary>Stops watching the keyboard.</summary>
+    public void Dispose()
+    {
+        ComponentDispatcher.ThreadPreprocessMessage -= OnPreprocessMessage;
+    }
+
+    private void OnPreprocessMessage(ref MSG message, ref bool handled)
+    {
+        if (handled)
+        {
+            return;
+        }
+        if (CommandOf(message) is not AppCommand command)
+        {
+            RetargetWheel(ref message);
+            RescaleWheel(ref message);
+            return;
+        }
+        SessionWindowView? active = Application.Current.Windows.OfType<SessionWindowView>().FirstOrDefault(view => view.IsActive);
+        handled = active?.TryExecute(command) ?? false;
+    }
+
+    private static void RetargetWheel(ref MSG message)
+    {
+        if (message.message != NativeMethods.WmMouseWheel)
+        {
+            return;
+        }
+        long lParam = (long)message.lParam;
+        NativeMethods.ScreenPoint cursor = new() { X = (short)lParam, Y = (short)(lParam >> 16) };
+        IntPtr under = NativeMethods.WindowFromPoint(cursor);
+        if (under != IntPtr.Zero && under != message.hwnd && NativeMethods.GetWindowThreadProcessId(under, IntPtr.Zero) == NativeMethods.GetCurrentThreadId())
+        {
+            message.hwnd = under;
+        }
+    }
+
+    private void RescaleWheel(ref MSG message)
+    {
+        if (message.message != NativeMethods.WmMouseWheel)
+        {
+            return;
+        }
+        long wParam = (long)message.wParam;
+        if (_wheel.Rescale((short)(wParam >> 16), SystemParameters.WheelScrollLines) is int delta)
+        {
+            message.wParam = new IntPtr(((long)(ushort)(short)delta << 16) | (wParam & 0xFFFF));
+        }
+    }
+
+    private static AppCommand? CommandOf(MSG message)
+    {
+        if (message.message == NativeMethods.WmMouseWheel)
+        {
+            return Keyboard.Modifiers == ModifierKeys.Control ? WheelZoom(message.wParam) : null;
+        }
+        if (message.message != NativeMethods.WmKeyDown && message.message != NativeMethods.WmSysKeyDown)
+        {
+            return null;
+        }
+        Key key = KeyInterop.KeyFromVirtualKey((int)message.wParam);
+        return Shortcuts.TryGetValue((key, Keyboard.Modifiers), out AppCommand command) ? command : null;
+    }
+
+    private static AppCommand WheelZoom(IntPtr wParam)
+    {
+        short delta = (short)((long)wParam >> 16);
+        return delta > 0 ? AppCommand.ZoomIn : AppCommand.ZoomOut;
+    }
+}

@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ClaudeSessions.Core/ClaudeSessions.Core.csproj" />
+    <Project Path="src/ClaudeSessions.Adapters/ClaudeSessions.Adapters.csproj" />
+    <Project Path="src/ClaudeSessions.Windows/ClaudeSessions.Windows.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ClaudeSessions.Tests/ClaudeSessions.Tests.csproj" />
+  </Folder>
+</Solution>

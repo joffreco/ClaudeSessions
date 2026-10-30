@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <RootNamespace>ClaudeSessions.Windows</RootNamespace>
+    <AssemblyName>ClaudeSessions</AssemblyName>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets/ClaudeSessions.ico</ApplicationIcon>
+  </PropertyGroup>
+  <PropertyGroup>
+    <TerminalControlDir>$(MSBuildThisFileDirectory)../../vendor/terminal/</TerminalControlDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <Resource Include="Assets/ClaudeSessions.ico" />
+    <ProjectReference Include="../ClaudeSessions.Core/ClaudeSessions.Core.csproj" />
+    <ProjectReference Include="../ClaudeSessions.Adapters/ClaudeSessions.Adapters.csproj" />
+    <PackageReference Include="Microsoft.Windows.Console.ConPTY" Version="1.25.260930003" />
+    <Reference Include="Microsoft.Terminal.Wpf" HintPath="$(TerminalControlDir)lib/net8.0-windows7.0/Microsoft.Terminal.Wpf.dll" />
+    <None Include="$(TerminalControlDir)runtimes/win-x64/native/Microsoft.Terminal.Control.dll" Link="Microsoft.Terminal.Control.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+  <Target Name="RequireTerminalControl" BeforeTargets="ResolveAssemblyReferences" Condition="!Exists('$(TerminalControlDir)lib/net8.0-windows7.0/Microsoft.Terminal.Wpf.dll')">
+    <Error Text="Terminal control missing: run ./restore-terminal-control.sh first." />
+  </Target>
+</Project>

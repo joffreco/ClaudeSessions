@@ -40,7 +40,7 @@ internal sealed class App : Application, IDisposable
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
-        AppSettings settings = AppSettingsFile.Load(AppPaths.SettingsFile);
+        AppSettings settings = AppSettingsFile.Load(AppPaths.SettingsFile, WslDefaultDistribution.Read());
         HookFileTabSessionSource sessions = new(settings.SessionTabsDirectory);
         WorkspaceService service = new(
             new JsonWorkspaceStore(AppPaths.WorkspaceFile),

@@ -17,13 +17,14 @@ public sealed class WslCommandLine
 
     /// <summary>Builds the command line of a tab.</summary>
     /// <param name="request">The tab, its session and its directory.</param>
-    /// <returns>wsl.exe -d &lt;distro&gt; --cd &lt;cwd&gt; -e &lt;launcher&gt; &lt;tab&gt; &lt;session&gt;, each part quoted.</returns>
+    /// <returns>wsl.exe -d &lt;distro&gt; --cd &lt;cwd&gt; -e &lt;launcher&gt; &lt;tab&gt; &lt;session&gt;, each part quoted; without -d when no distribution is set.</returns>
     public string Build(TabLaunchRequest request)
     {
+        string[] distro = string.IsNullOrEmpty(_settings.Distro) ? [] : ["-d", _settings.Distro];
         string[] arguments =
         [
             _settings.WslExecutable,
-            "-d", _settings.Distro,
+            .. distro,
             "--cd", request.Cwd,
             "-e", _settings.LauncherPath,
             request.TabId.ToString(),

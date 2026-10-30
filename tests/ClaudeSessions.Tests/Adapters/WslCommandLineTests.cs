@@ -16,11 +16,22 @@ public sealed class WslCommandLineTests
     [Fact]
     public void Builds_the_launcher_command_line()
     {
-        WslCommandLine builder = new(new AppSettings());
+        WslCommandLine builder = new(new AppSettings { Distro = "Debian" });
 
         string commandLine = builder.Build(new TabLaunchRequest(Tab, Session, "/home/joff/Sources"));
 
         Assert.Equal("wsl.exe -d Debian --cd /home/joff/Sources -e /home/joff/.local/bin/claude-sessions-tab 11111111-2222-3333-4444-555555555555 aaaaaaaa-0000-0000-0000-000000000001", commandLine);
+    }
+
+    /// <summary>Without a distribution, wsl.exe gets no -d and runs its default distribution.</summary>
+    [Fact]
+    public void Leaves_out_the_distribution_when_none_is_set()
+    {
+        WslCommandLine builder = new(new AppSettings());
+
+        string commandLine = builder.Build(new TabLaunchRequest(Tab, Session, "/"));
+
+        Assert.StartsWith("wsl.exe --cd / -e ", commandLine, StringComparison.Ordinal);
     }
 
     /// <summary>A directory with spaces and an apostrophe stays one argument.</summary>

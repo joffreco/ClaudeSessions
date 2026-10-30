@@ -6,8 +6,8 @@ public sealed record AppSettings
     /// <summary>Executable started for each tab.</summary>
     public string WslExecutable { get; init; } = "wsl.exe";
 
-    /// <summary>WSL distribution that runs the sessions.</summary>
-    public string Distro { get; init; } = "Debian";
+    /// <summary>WSL distribution that runs the sessions; empty for the default distribution of WSL.</summary>
+    public string Distro { get; init; } = "";
 
     /// <summary>Home directory of the WSL user.</summary>
     public string WslHome { get; init; } = "/home/joff";

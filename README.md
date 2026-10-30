@@ -114,7 +114,7 @@ If another tool also reopens Claude sessions at logon (such as `claude-restore` 
 | Key | Default | Meaning |
 |-----|---------|---------|
 | `wslExecutable` | `wsl.exe` | Executable started for each tab |
-| `distro` | `Debian` | WSL distribution |
+| `distro` | empty | WSL distribution; empty for the default distribution of WSL, read from the registry at each start |
 | `wslHome` | `/home/joff` | Home of the WSL user; the hook records are under `<wslHome>/.claude/session-tabs` |
 | `launcherPath` | `/home/joff/.local/bin/claude-sessions-tab` | WSL path of the launcher |
 | `defaultCwd` | `/home/joff/Sources` | Directory of the first tab of a new window |

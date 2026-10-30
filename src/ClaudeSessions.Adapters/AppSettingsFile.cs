@@ -14,8 +14,15 @@ public sealed class AppSettingsFile
 
     /// <summary>Loads the settings.</summary>
     /// <param name="path">Path of settings.json.</param>
+    /// <param name="defaultDistro">Default WSL distribution, used when the file names none; null when unknown.</param>
     /// <returns>The settings; the defaults when the file is missing or unreadable.</returns>
-    public static AppSettings Load(string path)
+    public static AppSettings Load(string path, string? defaultDistro)
+    {
+        AppSettings settings = Read(path);
+        return string.IsNullOrEmpty(settings.Distro) && defaultDistro is not null ? settings with { Distro = defaultDistro } : settings;
+    }
+
+    private static AppSettings Read(string path)
     {
         if (!File.Exists(path))
         {

@@ -63,7 +63,8 @@ internal static class SelfUpdater
     /// <returns>Null when the installer started, else why it did not.</returns>
     public static string? StartInstaller(InstallSource source)
     {
-        ProcessStartInfo start = new("powershell.exe") { UseShellExecute = false, CreateNoWindow = true };
+        // Not the app's working directory, the installation folder: the installer would lock the folder it replaces.
+        ProcessStartInfo start = new("powershell.exe") { UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = Path.GetTempPath() };
         string[] arguments =
         [
             "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", source.InstallerPath,

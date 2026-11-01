@@ -40,15 +40,28 @@ $backup = "$target.previous"
 $exe = Join-Path $target 'ClaudeSessions.exe'
 $updating = $WaitForProcess -gt 0
 
+function Get-AppProcesses {
+    # The app and the OpenConsole.exe of its tabs, which run from the installation folder.
+    Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith("$target\", [StringComparison]::OrdinalIgnoreCase) }
+}
+
 function Wait-App {
     if ($updating) {
         $running = Get-Process -Id $WaitForProcess -ErrorAction SilentlyContinue
         if ($running -and -not $running.WaitForExit(60000)) {
             throw "ClaudeSessions (process $WaitForProcess) did not exit within 60 seconds."
         }
+        $deadline = (Get-Date).AddSeconds(30)
+        while ((Get-AppProcesses) -and (Get-Date) -lt $deadline) {
+            Start-Sleep -Milliseconds 250
+        }
     }
     if (Get-Process -Name 'ClaudeSessions' -ErrorAction SilentlyContinue) {
         throw 'ClaudeSessions is running. Quit it from its menu (Quitter), then run this script again.'
+    }
+    $holders = Get-AppProcesses
+    if ($holders) {
+        throw "These processes still run from ${target}: $(($holders | ForEach-Object { "$($_.ProcessName) ($($_.Id))" }) -join ', ')."
     }
 }
 
@@ -61,11 +74,13 @@ function Write-InstallSource {
 }
 
 function Copy-App {
-    if (Test-Path $backup) {
-        Remove-Item -Path $backup -Recurse -Force
-    }
-    if (Test-Path $target) {
-        Move-Item -Path $target -Destination $backup
+    # The backup is a copy, not a move: a folder open elsewhere (Explorer, a shell) cannot be moved.
+    $hadPrevious = Test-Path $target
+    if ($hadPrevious) {
+        if (Test-Path $backup) {
+            Remove-Item -Path $backup -Recurse -Force
+        }
+        Copy-Item -Path $target -Destination $backup -Recurse -Force
     }
     try {
         New-Item -ItemType Directory -Force -Path $target | Out-Null
@@ -73,11 +88,8 @@ function Copy-App {
         Write-InstallSource
     }
     catch {
-        if (Test-Path $target) {
-            Remove-Item -Path $target -Recurse -Force
-        }
-        if (Test-Path $backup) {
-            Move-Item -Path $backup -Destination $target
+        if ($hadPrevious) {
+            Copy-Item -Path (Join-Path $backup '*') -Destination $target -Recurse -Force -ErrorAction Continue
         }
         throw
     }
@@ -113,6 +125,9 @@ function Install-App {
 }
 
 $failure = $null
+# Never stand in the folder being replaced, whoever started the script; a relative -Source still works.
+$Source = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Source)
+Set-Location -LiteralPath ([System.IO.Path]::GetTempPath())
 try {
     Install-App
 }

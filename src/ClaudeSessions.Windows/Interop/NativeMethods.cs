@@ -420,4 +420,40 @@ internal static partial class NativeMethods
     [LibraryImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static partial bool GetWindowRect(IntPtr window, out ScreenRect bounds);
+
+    /// <summary>Flash flag: flash the taskbar button.</summary>
+    internal const uint FlashTray = 0x00000002;
+
+    /// <summary>Flash flag: flash until the window comes to the foreground.</summary>
+    internal const uint FlashUntilForeground = 0x0000000C;
+
+    /// <summary>Flash flag: stop flashing.</summary>
+    internal const uint FlashStop = 0;
+
+    /// <summary>Parameters of <see cref="FlashWindowEx"/> (FLASHWINFO).</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct FlashInfo
+    {
+        /// <summary>Size of the structure, in bytes.</summary>
+        public uint Size;
+
+        /// <summary>The window to flash.</summary>
+        public IntPtr Window;
+
+        /// <summary>What to flash, and until when.</summary>
+        public uint Flags;
+
+        /// <summary>Number of flashes; 0 with <see cref="FlashUntilForeground"/>.</summary>
+        public uint Count;
+
+        /// <summary>Flash period in milliseconds; 0 for the cursor blink rate.</summary>
+        public uint Timeout;
+    }
+
+    /// <summary>Flashes a window's taskbar button, or stops it.</summary>
+    /// <param name="info">The window and the flags.</param>
+    /// <returns>True when the window was active before the call.</returns>
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool FlashWindowEx(ref FlashInfo info);
 }

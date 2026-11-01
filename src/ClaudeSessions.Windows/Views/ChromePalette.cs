@@ -20,6 +20,9 @@ internal static class ChromePalette
     /// <summary>The state mark of a session that waits for the user, green as in Windows Terminal.</summary>
     public static readonly Brush IdleMark = Frozen(Color.FromRgb(0x16, 0xC6, 0x0C));
 
+    /// <summary>Background of a tab whose session finished working while nobody watched it.</summary>
+    public static readonly Brush WaitingTab = Frozen(Color.FromRgb(0x1E, 0x4D, 0x24));
+
     /// <summary>Background of the banner of a failed session.</summary>
     public static readonly Brush Banner = Frozen(Color.FromRgb(0x5A, 0x1D, 0x1D));
 

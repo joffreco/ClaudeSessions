@@ -2,14 +2,17 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shell;
 using ClaudeSessions.Core.Domain;
 using ClaudeSessions.Windows.Hosting;
+using ClaudeSessions.Windows.Interop;
 using ClaudeSessions.Windows.Terminal;
 
 namespace ClaudeSessions.Windows.Views;
@@ -28,6 +31,7 @@ internal sealed class SessionWindowView : Window
     private readonly Dictionary<TabId, TabTerminal> _terminals = [];
     private readonly Dictionary<TabId, int> _failures = [];
     private readonly Dictionary<TabId, SessionTitle> _statuses = [];
+    private readonly AttentionTracker _attention = new();
     private readonly StackPanel _tabStrip = new() { Orientation = Orientation.Horizontal };
     private readonly Grid _terminalHost = new();
     private readonly Border _banner = new() { Background = ChromePalette.Banner, Padding = new Thickness(10, 6, 10, 6), Visibility = Visibility.Collapsed };
@@ -159,6 +163,7 @@ internal sealed class SessionWindowView : Window
         }
         _failures.Remove(tabId);
         _statuses.Remove(tabId);
+        _attention.Forget(tabId);
         Refresh();
     }
 
@@ -169,6 +174,7 @@ internal sealed class SessionWindowView : Window
     {
         _failures.Remove(tabId);
         _statuses.Remove(tabId);
+        _attention.Forget(tabId);
         _terminals[tabId].Launch(commandLine);
         Refresh();
     }
@@ -180,23 +186,36 @@ internal sealed class SessionWindowView : Window
     {
         _failures[tabId] = exitCode;
         _statuses.Remove(tabId);
+        _attention.Forget(tabId);
         Refresh();
     }
 
-    /// <summary>Shows the state mark the session of a tab put in its last title.</summary>
+    /// <summary>
+    /// Shows the state mark the session of a tab put in its last title. A session that finishes working
+    /// while nobody watches it colors its tab, and flashes the window when the window is not active.
+    /// </summary>
     /// <param name="tabId">The tab.</param>
     /// <param name="title">Its last title.</param>
     public void ShowStatus(TabId tabId, SessionTitle title)
     {
         _statuses[tabId] = title;
+        bool watched = tabId == Model.SelectedTabId && IsActive;
+        if (_attention.Observe(tabId, title, watched) && !IsActive)
+        {
+            FlashTaskbarButton();
+        }
         Refresh();
     }
 
     /// <summary>Redraws the tab strip and shows the selected terminal, starting its session if needed.</summary>
     public void Refresh()
     {
-        RebuildTabStrip();
         TabId? selected = Model.SelectedTabId;
+        if (selected is TabId watched && IsActive)
+        {
+            _attention.Seen(watched);
+        }
+        RebuildTabStrip();
         foreach ((TabId tabId, TabTerminal terminal) in _terminals)
         {
             terminal.Visibility = tabId == selected ? Visibility.Visible : Visibility.Collapsed;
@@ -263,12 +282,23 @@ internal sealed class SessionWindowView : Window
         Activate();
     }
 
-    /// <summary>Gives the keyboard back to the selected terminal when the window becomes active.</summary>
+    /// <summary>
+    /// Gives the keyboard back to the selected terminal when the window becomes active, and ends the
+    /// wait of the selected tab, which the user now sees.
+    /// </summary>
     /// <param name="e">The activation event.</param>
     protected override void OnActivated(EventArgs e)
     {
         base.OnActivated(e);
-        if (Model.SelectedTabId is TabId selected && _terminals.TryGetValue(selected, out TabTerminal? terminal))
+        if (Model.SelectedTabId is not TabId selected)
+        {
+            return;
+        }
+        if (_attention.Seen(selected))
+        {
+            RebuildTabStrip();
+        }
+        if (_terminals.TryGetValue(selected, out TabTerminal? terminal))
         {
             terminal.FocusTerminal();
         }
@@ -455,7 +485,7 @@ internal sealed class SessionWindowView : Window
         Border header = new()
         {
             Child = label,
-            Background = tab.Id == Model.SelectedTabId ? ChromePalette.SelectedTab : ChromePalette.IdleTab,
+            Background = TabBackground(tabId),
             Padding = new Thickness(10, 5, 10, 5),
             Margin = new Thickness(0, 4, 2, 0),
             CornerRadius = new CornerRadius(4, 4, 0, 0),
@@ -473,6 +503,29 @@ internal sealed class SessionWindowView : Window
             }
         };
         return header;
+    }
+
+    private Brush TabBackground(TabId tabId)
+    {
+        if (tabId == Model.SelectedTabId)
+        {
+            return ChromePalette.SelectedTab;
+        }
+        return _attention.IsWaiting(tabId) ? ChromePalette.WaitingTab : ChromePalette.IdleTab;
+    }
+
+    private void FlashTaskbarButton()
+    {
+        NativeMethods.FlashInfo info = new()
+        {
+            Size = (uint)Marshal.SizeOf<NativeMethods.FlashInfo>(),
+            Window = new WindowInteropHelper(this).Handle,
+            Flags = NativeMethods.FlashTray | NativeMethods.FlashUntilForeground,
+        };
+        if (info.Window != IntPtr.Zero)
+        {
+            NativeMethods.FlashWindowEx(ref info);
+        }
     }
 
     private void UpdateBanner(TabId? selected)

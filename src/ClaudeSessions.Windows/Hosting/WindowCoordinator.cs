@@ -20,6 +20,7 @@ namespace ClaudeSessions.Windows.Hosting;
 internal sealed class WindowCoordinator
 {
     private static readonly TimeSpan SynchronizationPeriod = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan ReconnectRedrawDelay = TimeSpan.FromSeconds(1);
     private const int MaxSuggestedFolders = 40;
 
     private readonly WorkspaceService _service;
@@ -30,6 +31,7 @@ internal sealed class WindowCoordinator
     private readonly Dictionary<WindowId, SessionWindowView> _views = [];
     private readonly DispatcherTimer _timer;
     private bool _synchronizing;
+    private bool _updating;
 
     /// <summary>Creates the coordinator.</summary>
     /// <param name="service">The use cases.</param>
@@ -65,6 +67,135 @@ internal sealed class WindowCoordinator
     public void Activate()
     {
         _views.Values.FirstOrDefault()?.BringToFront();
+    }
+
+    /// <summary>
+    /// Checks for updates in the WSL repository the app was installed from: pulls and compares its commit
+    /// with the running one. When they differ and the update is confirmed, publishes while everything
+    /// keeps running, then quits and lets install.ps1 replace and restart the app. Every window closes
+    /// with the app and comes back with it.
+    /// </summary>
+    /// <param name="view">Window the check was asked from, owner of the messages.</param>
+    public void Update(SessionWindowView view)
+    {
+        _ = UpdateAsync(view);
+    }
+
+    private async Task UpdateAsync(SessionWindowView view)
+    {
+        if (_updating || _service.IsShuttingDown)
+        {
+            return;
+        }
+        InstallSource? source = SelfUpdater.Source;
+        if (source is null)
+        {
+            Inform(view, "Cette installation ne vient pas d'un dépôt WSL. Relancez install.ps1 depuis le dépôt pour activer la mise à jour.", MessageBoxImage.Information);
+            return;
+        }
+        _updating = true;
+        try
+        {
+            UpdateProgress checking = UpdateProgress.Open(view, $"Vérification des mises à jour : git pull dans {source.RepoPath}…");
+            (UpdateCheck? check, string failure) result;
+            try
+            {
+                result = await SelfUpdater.CheckAsync(_settings.WslExecutable, source).ConfigureAwait(true);
+            }
+            finally
+            {
+                checking.Close();
+            }
+            if (result.check is not UpdateCheck check)
+            {
+                Inform(view, "La vérification a échoué ; l'app continue avec la version actuelle.\n\n" + result.failure, MessageBoxImage.Error);
+                return;
+            }
+            if (check.IsInstalled(SelfUpdater.InstalledRevision))
+            {
+                Inform(view, $"Claude Sessions est à jour (commit {check.Head[..7]}).", MessageBoxImage.Information);
+                return;
+            }
+            if (!Confirm(view, UpdateQuestion(check)))
+            {
+                return;
+            }
+            UpdateProgress building = UpdateProgress.Open(view, "Compilation de la nouvelle version…");
+            WslRun build;
+            try
+            {
+                build = await SelfUpdater.PublishAsync(_settings.WslExecutable, source).ConfigureAwait(true);
+            }
+            finally
+            {
+                building.Close();
+            }
+            if (!build.Succeeded)
+            {
+                Inform(view, "La compilation a échoué ; l'app continue avec la version actuelle.\n\n" + build.Tail, MessageBoxImage.Error);
+                return;
+            }
+            if (SelfUpdater.StartInstaller(source) is string error)
+            {
+                Inform(view, "L'installeur n'a pas démarré ; l'app continue avec la version actuelle.\n\n" + error, MessageBoxImage.Error);
+                return;
+            }
+            Quit();
+        }
+        finally
+        {
+            _updating = false;
+        }
+    }
+
+    private string UpdateQuestion(UpdateCheck check)
+    {
+        string changes = check.Changes.Count > 0
+            ? "Une nouvelle version est disponible :\n\n" + SelfUpdater.BulletList(check.Changes)
+            : $"Une autre version est disponible (commit {check.Head[..7]}).";
+        List<string> busy = _views.Values.SelectMany(window => window.BusyTabTitles).ToList();
+        string warning = busy.Count > 0
+            ? "\n\nCes sessions travaillent encore et leur tour sera interrompu :\n\n" + SelfUpdater.BulletList(busy)
+            : "";
+        return changes + warning + "\n\nMettre à jour maintenant ? L'app compilera la nouvelle version, se fermera, puis se relancera avec toutes ses fenêtres.";
+    }
+
+    private static void Inform(Window owner, string text, MessageBoxImage image)
+    {
+        if (owner.IsLoaded)
+        {
+            MessageBox.Show(owner, text, "Mise à jour", MessageBoxButton.OK, image);
+        }
+        else
+        {
+            MessageBox.Show(text, "Mise à jour", MessageBoxButton.OK, image);
+        }
+    }
+
+    private static bool Confirm(Window owner, string text)
+    {
+        MessageBoxResult answer = owner.IsLoaded
+            ? MessageBox.Show(owner, text, "Mise à jour", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No)
+            : MessageBox.Show(text, "Mise à jour", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+        return answer == MessageBoxResult.Yes;
+    }
+
+    /// <summary>
+    /// Repaints every session once the display is back after a remote desktop or console reconnection,
+    /// which leaves the terminal controls black. Waits a moment so the display is ready first.
+    /// </summary>
+    public void RedrawAfterReconnect()
+    {
+        DispatcherTimer delay = new() { Interval = ReconnectRedrawDelay };
+        delay.Tick += (_, _) =>
+        {
+            delay.Stop();
+            foreach (SessionWindowView view in _views.Values)
+            {
+                view.RedrawAll();
+            }
+        };
+        delay.Start();
     }
 
     /// <summary>Creates the terminal of a tab, with the configured font at the current zoom.</summary>

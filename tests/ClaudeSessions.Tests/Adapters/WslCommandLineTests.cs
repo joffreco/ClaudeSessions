@@ -67,5 +67,37 @@ public sealed class WslCommandLineTests
         Assert.StartsWith("C:\\Windows\\System32\\wsl.exe -d Ubuntu --cd / -e /opt/tab ", commandLine, StringComparison.Ordinal);
     }
 
+    private static readonly InstallSource Repository = new("Ubuntu-24.04", "/home/joff/Projets/ClaudeSessions");
+    private const string Installed = "8a668b19fdbf795c1a680501f17d2a21f0ea2220";
+
+    /// <summary>The check pulls without prompting in the repository and lists the commits since the installed one.</summary>
+    [Fact]
+    public void Builds_the_update_check_arguments()
+    {
+        string[] arguments = WslCommandLine.UpdateCheckArguments(Repository, Installed);
+
+        Assert.Equal(["-d", "Ubuntu-24.04", "--cd", "/home/joff/Projets/ClaudeSessions", "-e", "bash", "-lc"], arguments[..7]);
+        Assert.StartsWith("GIT_TERMINAL_PROMPT=0 git pull --ff-only ", arguments[7], StringComparison.Ordinal);
+        Assert.Equal(["check", Installed], arguments[8..]);
+    }
+
+    /// <summary>An unknown or malformed installed commit never reaches the shell.</summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData("HEAD; rm -rf ~")]
+    public void Passes_no_unknown_commit_to_the_shell(string? installed)
+    {
+        string[] arguments = WslCommandLine.UpdateCheckArguments(Repository, installed);
+
+        Assert.Equal("unknown", arguments[^1]);
+    }
+
+    /// <summary>The publish runs publish.sh from a login shell in the repository.</summary>
+    [Fact]
+    public void Builds_the_publish_arguments()
+    {
+        Assert.Equal(["-d", "Ubuntu-24.04", "--cd", "/home/joff/Projets/ClaudeSessions", "-e", "bash", "-lc", "./publish.sh"], WslCommandLine.PublishArguments(Repository));
+    }
+
     // category N/A: error — building the command line has no failure path; the ids are validated types.
 }

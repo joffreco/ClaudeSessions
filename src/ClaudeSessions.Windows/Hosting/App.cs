@@ -2,6 +2,7 @@ using System;
 using System.Windows;
 using ClaudeSessions.Adapters;
 using ClaudeSessions.Core.Application;
+using Microsoft.Win32;
 
 namespace ClaudeSessions.Windows.Hosting;
 
@@ -57,6 +58,15 @@ internal sealed class App : Application, IDisposable
         _coordinator.Start();
         WindowCoordinator coordinator = _coordinator;
         _gate.ListenForActivation(() => Dispatcher.BeginInvoke(coordinator.Activate));
+        SystemEvents.SessionSwitch += OnSessionSwitch;
+    }
+
+    private void OnSessionSwitch(object sender, SessionSwitchEventArgs e)
+    {
+        if (e.Reason is SessionSwitchReason.RemoteConnect or SessionSwitchReason.ConsoleConnect && _coordinator is WindowCoordinator coordinator)
+        {
+            Dispatcher.BeginInvoke(coordinator.RedrawAfterReconnect);
+        }
     }
 
     /// <summary>Saves synchronously when Windows ends the session; WPF shuts down right after this returns.</summary>
@@ -67,9 +77,10 @@ internal sealed class App : Application, IDisposable
         base.OnSessionEnding(e);
     }
 
-    /// <summary>Stops the keyboard routing.</summary>
+    /// <summary>Stops the keyboard routing and the session switch listening.</summary>
     public void Dispose()
     {
+        SystemEvents.SessionSwitch -= OnSessionSwitch;
         _keyboard?.Dispose();
     }
 }

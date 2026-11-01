@@ -80,6 +80,12 @@ internal sealed class SessionWindowView : Window
     /// <summary>Tabs whose session process runs right now.</summary>
     public IEnumerable<TabId> RunningTabIds => _terminals.Where(pair => pair.Value.IsRunning).Select(pair => pair.Key);
 
+    /// <summary>Titles of the running tabs whose session is working, by the spinner in their last title.</summary>
+    public IEnumerable<string> BusyTabTitles => Model.Tabs
+        .Where(tab => _terminals.TryGetValue(tab.Id, out TabTerminal? terminal) && terminal.IsRunning
+            && _statuses.TryGetValue(tab.Id, out SessionTitle? status) && status.Status is not null && !status.IsIdle)
+        .Select(tab => tab.DisplayTitle);
+
     /// <summary>Runs a command on this window.</summary>
     /// <param name="command">The command.</param>
     /// <returns>True when the command applied and the key must not reach the terminal.</returns>
@@ -222,6 +228,15 @@ internal sealed class SessionWindowView : Window
         }
     }
 
+    /// <summary>Asks every session of the window to repaint its screen, each when its tab is shown.</summary>
+    public void RedrawAll()
+    {
+        foreach (TabTerminal terminal in _terminals.Values)
+        {
+            terminal.RequestRedraw();
+        }
+    }
+
     /// <summary>Stops every session of the window without raising their exit events.</summary>
     public void KillAll()
     {
@@ -350,6 +365,7 @@ internal sealed class SessionWindowView : Window
         menu.Items.Add(ClosedWindowsMenu());
         menu.Items.Add(WheelLinesMenu());
         menu.Items.Add(new Separator());
+        menu.Items.Add(MenuItem("Vérifier les mises à jour", "", () => _coordinator.Update(this)));
         menu.Items.Add(MenuItem("Quitter", "", () => _coordinator.Quit()));
         menu.IsOpen = true;
     }

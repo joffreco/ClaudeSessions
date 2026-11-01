@@ -17,6 +17,8 @@ The terminal is the Windows Terminal WPF control (same renderer as Windows Termi
 | Close a window, others open | Ends its sessions and lists it under **Fenêtres fermées** in the menu, from where it reopens with its tabs or is forgotten. |
 | Close the last window | Quits; that window comes back at the next start. |
 | **Quitter** (menu) | Saves and quits; every open window comes back at the next start. |
+| **Vérifier les mises à jour** (menu) | Pulls the repository the app was installed from and compares commits; when they differ and you confirm, publishes, quits and comes back as the new version with every open window. |
+| Remote desktop or console reconnection | Every session repaints its screen (Ctrl+L), the shown tab at once and the others when shown, since the reconnection leaves the terminals black. |
 | Windows logoff or shutdown | Saves at once, without reading WSL; every open window comes back at the next logon. |
 | `/exit` in a tab | Closes the tab and keeps it among the 10 last closed tabs. |
 | Session fails (exit code other than 0) | Keeps the tab with a banner: **Reprendre**, **Nouvelle session ici**, **Fermer**. |
@@ -100,10 +102,22 @@ dotnet format ClaudeSessions.slnx --verify-no-changes
 2. From Windows PowerShell, run the installer:
 
    ```powershell
-   powershell -ExecutionPolicy Bypass -File \\wsl.localhost\Debian\home\joff\Sources\ClaudeSessions\install.ps1
+   powershell -ExecutionPolicy Bypass -File \\wsl.localhost\Ubuntu-24.04\home\joff\Projets\ClaudeSessions\install.ps1
    ```
 
-   It copies `publish/` to `%LOCALAPPDATA%\Programs\ClaudeSessions` and creates a Start menu shortcut and a `shell:startup` shortcut. `-NoStartup` skips the second one; `-Source <folder>` installs from another folder. Quit the app before reinstalling.
+   It copies `publish/` to `%LOCALAPPDATA%\Programs\ClaudeSessions` and creates a Start menu shortcut and a `shell:startup` shortcut. `-NoStartup` skips the second one; `-Source <folder>` installs from another folder. Quit the app before reinstalling. The previous version is kept in `ClaudeSessions.previous` and put back if the copy fails.
+
+### Updating from the menu
+
+Run from a WSL repository, the installer records the distribution and the repository path in `install-source.json` next to the app. **☰ → Vérifier les mises à jour** then does the rest while the sessions keep running:
+
+1. In the repository, `git pull --ff-only` without any credentials prompt. A conflict, a diverged branch or uncommitted changes in the way stop here with the last lines of output, and the app keeps running.
+2. The commit of the repository is compared with the one the running app was built from, which the .NET SDK stamps into its informational version (`1.0.0+<commit>`). When they match, the app says it is up to date.
+3. Otherwise the app lists the subjects of the missing commits, names the sessions that are working (spinner in their tab) since their turn would be interrupted, and asks for confirmation.
+4. Once confirmed, `./publish.sh` builds the new version; a failed build stops here and the app keeps running.
+5. The app starts `install.ps1 -WaitForProcess <pid> -Restart` hidden, then quits as **Quitter** does. The installer waits for it to exit, copies the new version without touching the shortcuts, and starts the app, which reopens every window. If the copy fails, it puts the previous version back, starts it and shows the error.
+
+An installation made before this feature, or from a Windows folder, has no `install-source.json`; run the installer once from the repository to enable the menu entry.
 
 If another tool also reopens Claude sessions at logon (such as `claude-restore` in Windows Terminal), keep only one of them at logon.
 

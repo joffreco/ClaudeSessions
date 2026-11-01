@@ -16,12 +16,14 @@ internal sealed class TabTerminal : Border
 {
     private const string BracketedPasteStart = "\u001b[200~";
     private const string BracketedPasteEnd = "\u001b[201~";
+    private const string RedrawKey = "\u000c";
 
     private readonly string _fontFamily;
     private short _fontSize;
     private TerminalControl? _control;
     private TerminalControl? _connectedControl;
     private ConPtyConnection? _connection;
+    private bool _redrawPending;
 
     /// <summary>Creates an empty terminal; nothing runs until <see cref="Launch"/>.</summary>
     /// <param name="fontFamily">Font of the terminal.</param>
@@ -31,6 +33,7 @@ internal sealed class TabTerminal : Border
         _fontFamily = fontFamily;
         _fontSize = fontSize;
         Background = new SolidColorBrush(ColorOf(TerminalThemes.BackgroundRgb));
+        IsVisibleChanged += (_, _) => RedrawIfPending();
     }
 
     /// <summary>Raised when the session sets a new title.</summary>
@@ -105,6 +108,29 @@ internal sealed class TabTerminal : Border
         if (_connection is not null && Clipboard.ContainsText())
         {
             _connection.WriteInput(BracketedPasteStart + Clipboard.GetText() + BracketedPasteEnd);
+        }
+    }
+
+    /// <summary>
+    /// Asks the session to repaint its whole screen (Ctrl+L), at once when the terminal is shown, else
+    /// when it next is. Needed after a remote desktop reconnection, which leaves the control black.
+    /// </summary>
+    public void RequestRedraw()
+    {
+        _redrawPending = true;
+        RedrawIfPending();
+    }
+
+    private void RedrawIfPending()
+    {
+        if (!_redrawPending || !IsVisible)
+        {
+            return;
+        }
+        _redrawPending = false;
+        if (IsRunning && _connection is not null && _control is not null && ReferenceEquals(_control, _connectedControl))
+        {
+            _connection.WriteInput(RedrawKey);
         }
     }
 

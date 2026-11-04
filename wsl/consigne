@@ -1,0 +1,264 @@
+#!/bin/bash
+# consigne — dépose, archive et liste les consignes qu'une session Claude donne à exécuter.
+#
+#   consigne put --title <titre> [--id <id>] [--status en-revision|prete]   (Markdown sur stdin)
+#   consigne done <id>
+#   consigne list
+#   consigne wait <id|fichier .md> [--timeout <secondes>]
+#
+# Une consigne est écrite dans $CONSIGNES_ROOT/<clé>/<id>.md, où la clé est l'onglet ClaudeSessions de la
+# session (son tab_id, stable à travers /clear et /resume) ou _sans-onglet/<dossier du cwd> hors d'un onglet.
+# Le contrôle d'onglet est celui de wsl/claude-sessions-hook.sh de ClaudeSessions : CLAUDE_SESSIONS_TAB est un
+# UUID et l'ancêtre nommé claude le plus proche a le PID de CLAUDE_SESSIONS_TAB_PID ; un claude imbriqué ou en
+# arrière-plan hérite des variables mais pas du PID.
+#
+# Une étape marquée « <!-- callback --> » réveille la session quand l'utilisateur la coche : l'app ajoute une
+# ligne JSON à <id>.events.jsonl, et wait, lancé en arrière-plan, rend les lignes pas encore vues puis s'arrête
+# (0). Elle s'arrête aussi quand la consigne est archivée (3) ou au bout du timeout, 3600 s par défaut (4).
+#
+# Variables : CONSIGNES_ROOT (défaut ~/.claude/consignes), CLAUDE_SESSION_TABS (défaut ~/.claude/session-tabs),
+# CONSIGNES_WORKSPACE (workspace.json de ClaudeSessions ; défaut lu par %LOCALAPPDATA% de Windows).
+
+set -u
+
+root="${CONSIGNES_ROOT:-$HOME/.claude/consignes}"
+tabs="${CLAUDE_SESSION_TABS:-$HOME/.claude/session-tabs}"
+uuid='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+id_pattern='^[a-z0-9][a-z0-9-]{0,63}$'
+generic_title='Claude Code'
+
+fail() {
+  printf 'consigne: %s\n' "$1" >&2
+  exit "${2:-1}"
+}
+
+usage() {
+  sed -n '4,7p' "$0" | sed 's/^#   //' >&2
+  exit 2
+}
+
+in_tab() {
+  [[ "${CLAUDE_SESSIONS_TAB:-}" =~ $uuid ]] && [[ "${CLAUDE_SESSIONS_TAB_PID:-}" =~ ^[0-9]+$ ]] || return 1
+  local pid=$PPID depth=0 comm
+  while [ "$pid" -gt 1 ] && [ "$depth" -lt 64 ]; do
+    comm=$(cat "/proc/$pid/comm" 2>/dev/null) || return 1
+    if [ "$comm" = "claude" ]; then
+      [ "$pid" = "$CLAUDE_SESSIONS_TAB_PID" ]
+      return
+    fi
+    pid=$(awk '/^PPid:/ { print $2 }' "/proc/$pid/status" 2>/dev/null)
+    [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+    depth=$((depth + 1))
+  done
+  return 1
+}
+
+folder_name() {
+  local trimmed="${PWD%/}"
+  local name="${trimmed##*/}"
+  printf '%s' "${name:-/}"
+}
+
+folder_key() {
+  local name
+  name=$(folder_name)
+  [ "$name" = "/" ] && name="racine"
+  printf '_sans-onglet/%s' "$(printf '%s' "$name" | tr -c 'A-Za-z0-9._-' '_')"
+}
+
+session_key() {
+  if [ "$tab" = "" ]; then
+    folder_key
+  else
+    printf '%s' "$tab"
+  fi
+}
+
+workspace_file() {
+  if [ -n "${CONSIGNES_WORKSPACE+x}" ]; then
+    printf '%s' "$CONSIGNES_WORKSPACE"
+    return
+  fi
+  local local_app_data
+  local_app_data=$(cd /mnt/c 2>/dev/null && cmd.exe /c 'echo %LOCALAPPDATA%' 2>/dev/null | tr -d '\r')
+  [ -n "$local_app_data" ] || return 1
+  printf '%s/ClaudeSessions/workspace.json' "$(wslpath "$local_app_data" 2>/dev/null)"
+}
+
+tab_title() {
+  [ "$tab" != "" ] || return 0
+  local file
+  file=$(workspace_file) || return 0
+  [ -r "$file" ] || return 0
+  jq -r --arg id "$tab" --arg generic "$generic_title" '
+    [(.windows[]?.tabs[]?, .closedTabs[]?.tab) | select(type == "object" and .id == $id) | .title]
+    | map(select(type == "string" and . != "" and . != $generic)) | first // ""
+  ' "$file" 2>/dev/null
+}
+
+session_id() {
+  [ "$tab" != "" ] || return 0
+  jq -r '.session_id // ""' "$tabs/$tab.json" 2>/dev/null
+}
+
+slug() {
+  printf '%s' "$1" | iconv -f UTF-8 -t ASCII//TRANSLIT 2>/dev/null | tr 'A-Z' 'a-z' | tr -c 'a-z0-9' '-' \
+    | tr -s '-' | sed 's/^-//; s/-$//' | cut -c1-40 | sed 's/-$//'
+}
+
+header_line() {
+  jq -nr --arg key "$1" --arg value "$2" '"\($key): \($value | tojson)"'
+}
+
+existing_created() {
+  [ -f "$1" ] || return 0
+  sed -n '2,/^---$/ { s/^created: //p }' "$1" | head -n 1
+}
+
+put() {
+  local title="" id="" status="prete"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --title) [ $# -ge 2 ] || usage; title="$2"; shift 2 ;;
+      --id) [ $# -ge 2 ] || usage; id="$2"; shift 2 ;;
+      --status) [ $# -ge 2 ] || usage; status="$2"; shift 2 ;;
+      *) usage ;;
+    esac
+  done
+  [ -n "$title" ] || fail "--title est obligatoire" 2
+  case "$status" in en-revision|prete) ;; *) fail "--status vaut en-revision ou prete" 2 ;; esac
+  if [ -z "$id" ]; then
+    id="$(slug "$title")"
+    id="${id:-consigne}-$(date +%H%M%S)"
+  fi
+  [[ "$id" =~ $id_pattern ]] || fail "id invalide : $id (attendu ${id_pattern})" 2
+
+  local body
+  body=$(cat)
+  [ -n "${body//[[:space:]]/}" ] || fail "le Markdown de la consigne est vide (stdin)" 2
+
+  local dir="$root/$(session_key)"
+  local file="$dir/$id.md"
+  mkdir -p "$dir" || fail "impossible de créer $dir"
+  local now created
+  now=$(date --iso-8601=seconds)
+  created=$(existing_created "$file")
+  [ -n "$created" ] || created=$(header_line created "$now" | sed 's/^created: //')
+
+  local tmp
+  tmp=$(mktemp "$dir/.tmp.XXXXXX") || fail "impossible d'écrire dans $dir"
+  {
+    printf -- '---\n'
+    header_line title "$title"
+    header_line status "$status"
+    header_line tab_id "$tab"
+    header_line tab_title "$(tab_title)"
+    header_line session_id "$(session_id)"
+    header_line cwd "$PWD"
+    printf 'created: %s\n' "$created"
+    header_line updated "$now"
+    printf -- '---\n'
+    printf '%s\n' "$body"
+  } > "$tmp" || { rm -f "$tmp"; fail "écriture de $file impossible"; }
+  mv -f "$tmp" "$file" || { rm -f "$tmp"; fail "écriture de $file impossible"; }
+  printf 'id: %s\nfichier: %s\ncallbacks: %s\n' "$id" "$file" "$(callback_count <<< "$body")"
+}
+
+callback_count() {
+  awk '
+    /^[[:space:]]*(```|~~~)/ { fenced = !fenced; next }
+    !fenced && /^[[:space:]]*([-*+]|[0-9]+[.)])[[:space:]]+\[[ xX]\].*<!--[[:space:]]*callback[[:space:]]*-->/ { count++ }
+    END { print count + 0 }
+  '
+}
+
+consigne_file() {
+  if [[ "$1" == */* ]]; then
+    printf '%s' "$1"
+  else
+    [[ "$1" =~ $id_pattern ]] || fail "id invalide : $1" 2
+    printf '%s/%s/%s.md' "$root" "$(session_key)" "$1"
+  fi
+}
+
+new_ticks() {
+  local events="$1" seen_file="$2" seen total
+  seen=$(cat "$seen_file" 2>/dev/null)
+  [[ "$seen" =~ ^[0-9]+$ ]] || seen=0
+  [ -f "$events" ] && total=$(wc -l < "$events") || return 1
+  [ "$total" -gt "$seen" ] || return 1
+  sed -n "$((seen + 1)),${total}p" "$events" \
+    | jq -r '"Étape \((.index // 0) + 1) cochée : \(.text // "")"' 2>/dev/null
+  printf '%s\n' "$total" > "$seen_file"
+}
+
+wait_cmd() {
+  [ $# -ge 1 ] || usage
+  local target="$1" timeout=3600
+  shift
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --timeout) [ $# -ge 2 ] && [[ "$2" =~ ^[0-9]+$ ]] || usage; timeout="$2"; shift 2 ;;
+      *) usage ;;
+    esac
+  done
+  local file
+  file=$(consigne_file "$target") || exit $?
+  [[ "$file" == *.md ]] || fail "attendu un fichier .md : $file" 2
+  [ -f "$file" ] || fail "aucune consigne $file"
+  local base="${file%.md}" start=$SECONDS
+  exec 9>>"$base.events.seen" || fail "verrou impossible dans $(dirname "$file")"
+  while :; do
+    if flock 9 && new_ticks "$base.events.jsonl" "$base.events.seen"; then
+      exit 0
+    fi
+    flock -u 9
+    if [ ! -f "$file" ]; then
+      printf 'consigne %s archivée\n' "$(basename "$base")"
+      exit 3
+    fi
+    if [ $((SECONDS - start)) -ge "$timeout" ]; then
+      printf 'aucune case cochée en %s s\n' "$timeout"
+      exit 4
+    fi
+    sleep 1
+  done
+}
+
+done_cmd() {
+  [ $# -eq 1 ] || usage
+  [[ "$1" =~ $id_pattern ]] || fail "id invalide : $1" 2
+  local dir="$root/$(session_key)"
+  [ -f "$dir/$1.md" ] || fail "aucune consigne $1 dans $dir"
+  mkdir -p "$dir/archive" && mv -f "$dir/$1.md" "$dir/archive/$1.md" || fail "archivage de $1 impossible"
+  local extra
+  for extra in events.jsonl events.seen; do
+    [ -f "$dir/$1.$extra" ] && mv -f "$dir/$1.$extra" "$dir/archive/$1.$extra"
+  done
+  printf 'archivée: %s\n' "$1"
+}
+
+list() {
+  [ $# -eq 0 ] || usage
+  local dir="$root/$(session_key)" file
+  for file in "$dir"/*.md; do
+    [ -f "$file" ] || continue
+    printf '%s\t%s\t%s\n' "$(basename "$file" .md)" \
+      "$(sed -n '2,/^---$/ { s/^status: //p }' "$file" | head -n 1 | jq -r .)" \
+      "$(sed -n '2,/^---$/ { s/^title: //p }' "$file" | head -n 1 | jq -r .)"
+  done
+}
+
+tab=""
+in_tab && tab="$CLAUDE_SESSIONS_TAB"
+
+[ $# -ge 1 ] || usage
+command="$1"
+shift
+case "$command" in
+  put) put "$@" ;;
+  done) done_cmd "$@" ;;
+  list) list "$@" ;;
+  wait) wait_cmd "$@" ;;
+  *) usage ;;
+esac

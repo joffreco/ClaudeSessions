@@ -25,7 +25,7 @@ internal sealed class App : Application, IDisposable
     [STAThread]
     public static int Main()
     {
-        SingleInstanceGate? gate = SingleInstanceGate.TryAcquire();
+        SingleInstanceGate? gate = SingleInstanceGate.TryAcquire(SingleInstanceGate.ClaudeSessions);
         if (gate is null)
         {
             return 0;

@@ -1,13 +1,17 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Threading;
 using ClaudeSessions.Adapters;
+using ClaudeSessions.Adapters.Consignes;
 using ClaudeSessions.Core.Application;
 using ClaudeSessions.Core.Application.Dto;
+using ClaudeSessions.Core.Consignes.Application;
 using ClaudeSessions.Core.Domain;
 using ClaudeSessions.Windows.Terminal;
 using ClaudeSessions.Windows.Views;
@@ -68,6 +72,34 @@ internal sealed class WindowCoordinator
     public void Activate()
     {
         _views.Values.FirstOrDefault()?.BringToFront();
+    }
+
+    /// <summary>Starts the Consignes app installed next to this one; a running one comes to the front.</summary>
+    /// <param name="view">Window the menu was opened from, owner of the error message.</param>
+    public static void OpenConsignes(SessionWindowView view)
+    {
+        string? failure = null;
+        try
+        {
+            using Process? process = Process.Start(new ProcessStartInfo(AppPaths.ConsignesExecutable) { UseShellExecute = false, WorkingDirectory = AppContext.BaseDirectory });
+            failure = process is null ? "Consignes.exe n'a pas démarré." : null;
+        }
+        catch (Win32Exception exception)
+        {
+            failure = $"Consignes.exe n'a pas pu démarrer : {exception.Message}";
+        }
+        if (failure is not null)
+        {
+            MessageBox.Show(view, failure, "Consignes", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>Counts the unread consignes, off the UI thread.</summary>
+    /// <returns>How many consignes the user has not opened since their last version.</returns>
+    public Task<int> CountUnreadConsignesAsync()
+    {
+        string folder = _settings.ConsignesDirectory;
+        return Task.Run(() => UnreadConsignes.Count(new FolderConsigneSource(folder), new JsonReadingStateStore(AppPaths.ConsignesStateFile)));
     }
 
     /// <summary>
@@ -154,6 +186,10 @@ internal sealed class WindowCoordinator
         string changes = check.Changes.Count > 0
             ? "Une nouvelle version est disponible :\n\n" + SelfUpdater.BulletList(check.Changes)
             : $"Une autre version est disponible (commit {check.Head[..7]}).";
+        if (check.HasUncommittedFiles)
+        {
+            changes += $"\n\nLe dépôt a {check.UncommittedFiles} fichier(s) modifié(s) non commité(s) : la mise à jour les installe aussi.";
+        }
         List<string> busy = _views.Values.SelectMany(window => window.BusyTabTitles).ToList();
         string warning = busy.Count > 0
             ? "\n\nCes sessions travaillent encore et leur tour sera interrompu :\n\n" + SelfUpdater.BulletList(busy)

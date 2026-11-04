@@ -3,10 +3,10 @@ using System.IO;
 using System.Security;
 using Microsoft.Win32;
 
-namespace ClaudeSessions.Windows.Hosting;
+namespace ClaudeSessions.Adapters;
 
 /// <summary>Reads the default WSL distribution from the registry key where WSL lists the distributions of the user.</summary>
-internal static class WslDefaultDistribution
+public static class WslDefaultDistribution
 {
     private const string LxssKey = @"Software\Microsoft\Windows\CurrentVersion\Lxss";
 
@@ -14,6 +14,10 @@ internal static class WslDefaultDistribution
     /// <returns>Its name, such as Ubuntu-24.04; null when WSL has none or the key cannot be read.</returns>
     public static string? Read()
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            return null;
+        }
         try
         {
             using RegistryKey? lxss = Registry.CurrentUser.OpenSubKey(LxssKey);

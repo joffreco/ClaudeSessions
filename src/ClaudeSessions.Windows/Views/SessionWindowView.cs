@@ -435,6 +435,8 @@ internal sealed class SessionWindowView : Window
         menu.Items.Add(ClosedWindowsMenu());
         menu.Items.Add(WheelLinesMenu());
         menu.Items.Add(new Separator());
+        menu.Items.Add(ConsignesMenuItem());
+        menu.Items.Add(new Separator());
         menu.Items.Add(MenuItem("Vérifier les mises à jour", "", () => _coordinator.Update(this)));
         menu.Items.Add(MenuItem("Quitter", "", () => _coordinator.Quit()));
         menu.IsOpen = true;
@@ -454,6 +456,22 @@ internal sealed class SessionWindowView : Window
         }
         closedWindows.IsEnabled = closedWindows.Items.Count > 0;
         return closedWindows;
+    }
+
+    private MenuItem ConsignesMenuItem()
+    {
+        MenuItem item = MenuItem("Consignes", "", () => WindowCoordinator.OpenConsignes(this));
+        _ = ShowUnreadConsignesAsync(item);
+        return item;
+    }
+
+    private async System.Threading.Tasks.Task ShowUnreadConsignesAsync(MenuItem item)
+    {
+        int unread = await _coordinator.CountUnreadConsignesAsync().ConfigureAwait(true);
+        if (unread > 0)
+        {
+            item.Header = $"Consignes ({unread} non {(unread == 1 ? "lue" : "lues")})";
+        }
     }
 
     private MenuItem WheelLinesMenu()

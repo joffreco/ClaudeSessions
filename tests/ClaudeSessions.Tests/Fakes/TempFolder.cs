@@ -24,6 +24,18 @@ public sealed class TempFolder : IDisposable
         return System.IO.Path.Combine(Path, name);
     }
 
+    /// <summary>Writes a file under the folder, creating its directories.</summary>
+    /// <param name="relative">The file's path inside the folder, with forward slashes.</param>
+    /// <param name="content">Its content.</param>
+    /// <returns>Its full path.</returns>
+    public string Write(string relative, string content)
+    {
+        string file = System.IO.Path.Combine([Path, .. relative.Split('/')]);
+        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(file)!);
+        System.IO.File.WriteAllText(file, content);
+        return file;
+    }
+
     /// <summary>Deletes the folder and its content.</summary>
     public void Dispose()
     {

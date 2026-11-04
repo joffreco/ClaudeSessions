@@ -5,5 +5,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../ClaudeSessions.Core/ClaudeSessions.Core.csproj" />
+    <PackageReference Include="Markdig" Version="0.40.0" />
   </ItemGroup>
 </Project>

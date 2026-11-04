@@ -1,19 +1,23 @@
 #!/bin/bash
-# Set up the WSL side of ClaudeSessions: link the tab launcher into ~/.local/bin, link the hook into
-# ~/.claude/hooks, and register the hook for SessionStart and PermissionRequest in ~/.claude/settings.json
+# Set up the WSL side of ClaudeSessions: link the tab launcher and the consigne command into ~/.local/bin,
+# link the hook into ~/.claude/hooks and the consignes skill into ~/.claude/skills, create
+# ~/.claude/consignes, and register the hook for SessionStart and PermissionRequest in ~/.claude/settings.json
 # (a copy of the previous file is kept as settings.json.bak). Running it again changes nothing.
 set -euo pipefail
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+repo=$(dirname "$here")
 settings="$HOME/.claude/settings.json"
 command='bash "$HOME/.claude/hooks/claude-sessions-hook.sh"'
 
 command -v jq > /dev/null || { echo "jq is missing: sudo apt install jq" >&2; exit 1; }
 command -v claude > /dev/null || echo "warning: claude is not on this shell's PATH; the launcher runs it from a login shell" >&2
 
-mkdir -p "$HOME/.local/bin" "$HOME/.claude/hooks"
+mkdir -p "$HOME/.local/bin" "$HOME/.claude/hooks" "$HOME/.claude/skills" "$HOME/.claude/consignes"
 ln -sfn "$here/claude-sessions-tab" "$HOME/.local/bin/claude-sessions-tab"
 ln -sfn "$here/claude-sessions-hook.sh" "$HOME/.claude/hooks/claude-sessions-hook.sh"
+ln -sfn "$here/consigne" "$HOME/.local/bin/consigne"
+ln -sfn "$repo/skill/consignes" "$HOME/.claude/skills/consignes"
 
 [ -f "$settings" ] || echo '{}' > "$settings"
 for event in SessionStart PermissionRequest; do
@@ -29,3 +33,6 @@ for event in SessionStart PermissionRequest; do
 done
 echo "launcher: $HOME/.local/bin/claude-sessions-tab -> $here/claude-sessions-tab"
 echo "hook:     $HOME/.claude/hooks/claude-sessions-hook.sh -> $here/claude-sessions-hook.sh"
+echo "consigne: $HOME/.local/bin/consigne -> $here/consigne"
+echo "skill:    $HOME/.claude/skills/consignes -> $repo/skill/consignes"
+echo "folder:   $HOME/.claude/consignes"

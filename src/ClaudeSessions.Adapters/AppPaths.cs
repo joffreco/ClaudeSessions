@@ -1,10 +1,10 @@
 using System;
 using System.IO;
 
-namespace ClaudeSessions.Windows.Hosting;
+namespace ClaudeSessions.Adapters;
 
 /// <summary>Where the application keeps its files on Windows.</summary>
-internal static class AppPaths
+public static class AppPaths
 {
     /// <summary>Folder of the application data, under %LOCALAPPDATA%.</summary>
     public static string DataFolder => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ClaudeSessions");
@@ -20,4 +20,10 @@ internal static class AppPaths
 
     /// <summary>The view preferences chosen from the keyboard or the menu: zoom, lines per wheel notch.</summary>
     public static string PreferencesFile => Path.Combine(DataFolder, "preferences.json");
+
+    /// <summary>What the user read and ticked in the Consignes app.</summary>
+    public static string ConsignesStateFile => Path.Combine(DataFolder, "consignes-state.json");
+
+    /// <summary>The Consignes app, installed next to ClaudeSessions.</summary>
+    public static string ConsignesExecutable => Path.Combine(AppContext.BaseDirectory, "Consignes.exe");
 }

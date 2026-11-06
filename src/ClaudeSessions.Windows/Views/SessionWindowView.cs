@@ -2,18 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shell;
 using System.Windows.Threading;
 using ClaudeSessions.Core.Domain;
 using ClaudeSessions.Windows.Hosting;
-using ClaudeSessions.Windows.Interop;
 using ClaudeSessions.Windows.Terminal;
 
 namespace ClaudeSessions.Windows.Views;
@@ -25,10 +22,9 @@ namespace ClaudeSessions.Windows.Views;
 internal sealed class SessionWindowView : Window
 {
     private const double CaptionBarHeight = 36;
-    private const uint TaskbarFlashCount = 5;
 
-    /// <summary>How long a session must stay idle before the taskbar flashes: at the end of a turn, its title goes back and forth between the idle mark and the spinner.</summary>
-    private static readonly TimeSpan FlashDelay = TimeSpan.FromSeconds(1.5);
+    /// <summary>How long a session must stay idle before the taskbar badge shows: at the end of a turn, its title goes back and forth between the idle mark and the spinner.</summary>
+    private static readonly TimeSpan BadgeDelay = TimeSpan.FromSeconds(1.5);
     private static readonly int?[] WheelLineChoices = [1, 3, 5, 10, null];
     private static readonly Uri IconUri = new("pack://application:,,,/Assets/ClaudeSessions.ico");
 
@@ -54,10 +50,8 @@ internal sealed class SessionWindowView : Window
         UseAeroCaptionButtons = false,
     };
     private bool _closeAllowed;
-    private bool _flashing;
-    private readonly DispatcherTimer _flashDelay = new() { Interval = FlashDelay };
-    private readonly DispatcherTimer _flashStopRepeat = new() { Interval = TimeSpan.FromMilliseconds(100) };
-    private int _flashStopsLeft;
+    private readonly DispatcherTimer _badgeDelay = new() { Interval = BadgeDelay };
+    private readonly TaskbarItemInfo _taskbarItem = new();
 
     /// <summary>Creates the view of a window; its terminals start when their tab is shown.</summary>
     /// <param name="coordinator">Runs the use cases behind the window.</param>
@@ -78,8 +72,8 @@ internal sealed class SessionWindowView : Window
         {
             AttachTerminal(tab);
         }
-        _flashDelay.Tick += (_, _) => FlashIfStillWaiting();
-        _flashStopRepeat.Tick += (_, _) => RepeatFlashStop();
+        TaskbarItemInfo = _taskbarItem;
+        _badgeDelay.Tick += (_, _) => ShowBadgeIfStillWaiting();
         Loaded += (_, _) => Refresh();
         LocationChanged += (_, _) => ReportBounds();
         SizeChanged += (_, _) => ReportBounds();
@@ -203,7 +197,7 @@ internal sealed class SessionWindowView : Window
 
     /// <summary>
     /// Shows the state mark the session of a tab put in its last title. A session that finishes working
-    /// while nobody watches it colors its tab, and flashes the window when the window is not active.
+    /// while nobody watches it colors its tab, and badges the taskbar button when the window is not active.
     /// </summary>
     /// <param name="tabId">The tab.</param>
     /// <param name="title">Its last title.</param>
@@ -211,15 +205,10 @@ internal sealed class SessionWindowView : Window
     {
         _statuses[tabId] = title;
         bool watched = tabId == Model.SelectedTabId && IsActive;
-        bool started = _attention.Observe(tabId, title, watched);
-        if (title.IsIdle)
+        if (_attention.Observe(tabId, title, watched) && !IsActive)
         {
-            Trace($"idle tab={tabId.ToString()[..8]} watched={watched} started={started}");
-        }
-        if (started && !IsActive)
-        {
-            _flashDelay.Stop();
-            _flashDelay.Start();
+            _badgeDelay.Stop();
+            _badgeDelay.Start();
         }
         Refresh();
     }
@@ -234,7 +223,7 @@ internal sealed class SessionWindowView : Window
         }
         if (!Model.Tabs.Any(tab => _attention.IsWaiting(tab.Id)))
         {
-            StopFlashing();
+            ClearBadge();
         }
         RebuildTabStrip();
         foreach ((TabId tabId, TabTerminal terminal) in _terminals)
@@ -293,26 +282,11 @@ internal sealed class SessionWindowView : Window
         Close();
     }
 
-    /// <summary>Stops the flashing of the taskbar button and removes its highlight.</summary>
-    public void StopFlashing()
+    /// <summary>Removes the badge of the taskbar button, and cancels the one about to show.</summary>
+    public void ClearBadge()
     {
-        Trace("stop requested");
-        _flashDelay.Stop();
-        if (_flashing)
-        {
-            _flashing = false;
-            CallFlashWindow(NativeMethods.FlashStop, 0);
-            _flashStopsLeft = 15;
-            _flashStopRepeat.Start();
-        }
-    }
-
-    /// <summary>Traces the deactivation of the window, for the temporary flash trace.</summary>
-    /// <param name="e">The deactivation event.</param>
-    protected override void OnDeactivated(EventArgs e)
-    {
-        base.OnDeactivated(e);
-        Trace("deactivated");
+        _badgeDelay.Stop();
+        _taskbarItem.Overlay = null;
     }
 
     /// <summary>Brings the window to the front.</summary>
@@ -327,14 +301,13 @@ internal sealed class SessionWindowView : Window
 
     /// <summary>
     /// Gives the keyboard back to the selected terminal when the window becomes active, stops the
-    /// flashing of every window of the app, and ends the wait of the selected tab, which the user now sees.
+    /// taskbar badge of every window of the app, and ends the wait of the selected tab, which the user now sees.
     /// </summary>
     /// <param name="e">The activation event.</param>
     protected override void OnActivated(EventArgs e)
     {
         base.OnActivated(e);
-        Trace("activated");
-        _coordinator.StopFlashing();
+        _coordinator.ClearBadges();
         if (Model.SelectedTabId is not TabId selected)
         {
             return;
@@ -559,53 +532,12 @@ internal sealed class SessionWindowView : Window
         return _attention.IsWaiting(tabId) ? ChromePalette.WaitingTab : ChromePalette.IdleTab;
     }
 
-    private void FlashIfStillWaiting()
+    private void ShowBadgeIfStillWaiting()
     {
-        _flashDelay.Stop();
+        _badgeDelay.Stop();
         if (!IsActive && Model.Tabs.Any(tab => _attention.IsWaiting(tab.Id)))
         {
-            FlashTaskbarButton();
-        }
-    }
-
-    /// <summary>A stop sent during the activation of the window may leave the button lit, so it is sent again shortly after.</summary>
-    private void RepeatFlashStop()
-    {
-        _flashStopsLeft--;
-        if (_flashStopsLeft <= 0)
-        {
-            _flashStopRepeat.Stop();
-        }
-        CallFlashWindow(NativeMethods.FlashStop, 0);
-    }
-
-    private void FlashTaskbarButton()
-    {
-        _flashStopRepeat.Stop();
-        _flashing = true;
-        Trace("flash start");
-        CallFlashWindow(NativeMethods.FlashTray, TaskbarFlashCount);
-    }
-
-    private void Trace(string text)
-    {
-        IntPtr handle = new WindowInteropHelper(this).Handle;
-        FlashTrace.Write($"win={(long)handle:X} active={IsActive} foreground={NativeMethods.GetForegroundWindow() == handle} flashing={_flashing} {text}");
-    }
-
-    private void CallFlashWindow(uint flags, uint count)
-    {
-        NativeMethods.FlashInfo info = new()
-        {
-            Size = (uint)Marshal.SizeOf<NativeMethods.FlashInfo>(),
-            Window = new WindowInteropHelper(this).Handle,
-            Flags = flags,
-            Count = count,
-        };
-        if (info.Window != IntPtr.Zero)
-        {
-            bool wasActive = NativeMethods.FlashWindowEx(ref info);
-            Trace($"FlashWindowEx flags={flags} count={count} wasActive={wasActive}");
+            _taskbarItem.Overlay = ChromePalette.WaitingBadge;
         }
     }
 

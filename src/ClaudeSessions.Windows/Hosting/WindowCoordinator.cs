@@ -199,14 +199,14 @@ internal sealed class WindowCoordinator
     }
 
     /// <summary>
-    /// Stops the taskbar flashing of every window, because the user just came back to the app. With
-    /// grouped taskbar buttons the windows share one icon, so stopping one window would leave it lit.
+    /// Removes the taskbar badge of every window, because the user just came back to the app. With
+    /// grouped taskbar buttons the windows share one icon, so clearing one window could leave it badged.
     /// </summary>
-    public void StopFlashing()
+    public void ClearBadges()
     {
         foreach (SessionWindowView view in _views.Values)
         {
-            view.StopFlashing();
+            view.ClearBadge();
         }
     }
 

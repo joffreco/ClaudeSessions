@@ -54,7 +54,7 @@ internal sealed class App : Application, IDisposable
         WheelScrollService wheel = new(preferences);
         ZoomService zoom = new(preferences, settings.FontSize);
         _coordinator = new WindowCoordinator(service, new WslCommandLine(settings), settings, zoom, wheel);
-        _keyboard = new KeyboardRouter(wheel, _coordinator.StopFlashing);
+        _keyboard = new KeyboardRouter(wheel, _coordinator.ClearBadges);
         _coordinator.Start();
         WindowCoordinator coordinator = _coordinator;
         _gate.ListenForActivation(() => Dispatcher.BeginInvoke(coordinator.Activate));

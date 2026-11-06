@@ -1,3 +1,4 @@
+using System.Windows;
 using System.Windows.Media;
 
 namespace ClaudeSessions.Windows.Views;
@@ -23,6 +24,9 @@ internal static class ChromePalette
     /// <summary>Background of a tab whose session finished working while nobody watched it.</summary>
     public static readonly Brush WaitingTab = Frozen(Color.FromRgb(0x1E, 0x4D, 0x24));
 
+    /// <summary>Badge of the taskbar button of a window with a waiting tab: a green dot with a dark ring.</summary>
+    public static readonly ImageSource WaitingBadge = Badge();
+
     /// <summary>Background of the banner of a failed session.</summary>
     public static readonly Brush Banner = Frozen(Color.FromRgb(0x5A, 0x1D, 0x1D));
 
@@ -31,6 +35,16 @@ internal static class ChromePalette
 
     /// <summary>Background of the close button under the mouse.</summary>
     public static readonly Brush CloseHover = Frozen(Color.FromRgb(0xC4, 0x2B, 0x1C));
+
+    private static DrawingImage Badge()
+    {
+        Pen ring = new(Frozen(Color.FromRgb(0x0C, 0x0C, 0x0C)), 2);
+        ring.Freeze();
+        GeometryDrawing dot = new(IdleMark, ring, new EllipseGeometry(new Point(8, 8), 7, 7));
+        DrawingImage image = new(dot);
+        image.Freeze();
+        return image;
+    }
 
     private static SolidColorBrush Frozen(Color color)
     {

@@ -202,7 +202,12 @@ internal sealed class SessionWindowView : Window
     {
         _statuses[tabId] = title;
         bool watched = tabId == Model.SelectedTabId && IsActive;
-        if (_attention.Observe(tabId, title, watched) && !IsActive)
+        bool started = _attention.Observe(tabId, title, watched);
+        if (title.IsIdle)
+        {
+            Trace($"idle tab={tabId.ToString()[..8]} watched={watched} started={started}");
+        }
+        if (started && !IsActive)
         {
             FlashTaskbarButton();
         }
@@ -281,11 +286,20 @@ internal sealed class SessionWindowView : Window
     /// <summary>Stops the flashing of the taskbar button and removes its highlight.</summary>
     public void StopFlashing()
     {
+        Trace("stop requested");
         if (_flashing)
         {
             _flashing = false;
             CallFlashWindow(NativeMethods.FlashStop, 0);
         }
+    }
+
+    /// <summary>Traces the deactivation of the window, for the temporary flash trace.</summary>
+    /// <param name="e">The deactivation event.</param>
+    protected override void OnDeactivated(EventArgs e)
+    {
+        base.OnDeactivated(e);
+        Trace("deactivated");
     }
 
     /// <summary>Brings the window to the front.</summary>
@@ -306,6 +320,7 @@ internal sealed class SessionWindowView : Window
     protected override void OnActivated(EventArgs e)
     {
         base.OnActivated(e);
+        Trace("activated");
         _coordinator.StopFlashing();
         if (Model.SelectedTabId is not TabId selected)
         {
@@ -534,9 +549,15 @@ internal sealed class SessionWindowView : Window
     private void FlashTaskbarButton()
     {
         _flashing = true;
+        Trace("flash start");
         CallFlashWindow(NativeMethods.FlashTray, TaskbarFlashCount);
     }
 
+    private void Trace(string text)
+    {
+        IntPtr handle = new WindowInteropHelper(this).Handle;
+        FlashTrace.Write($"win={(long)handle:X} active={IsActive} foreground={NativeMethods.GetForegroundWindow() == handle} flashing={_flashing} {text}");
+    }
 
     private void CallFlashWindow(uint flags, uint count)
     {
@@ -549,7 +570,8 @@ internal sealed class SessionWindowView : Window
         };
         if (info.Window != IntPtr.Zero)
         {
-            NativeMethods.FlashWindowEx(ref info);
+            bool wasActive = NativeMethods.FlashWindowEx(ref info);
+            Trace($"FlashWindowEx flags={flags} count={count} wasActive={wasActive}");
         }
     }
 

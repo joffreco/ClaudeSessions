@@ -433,6 +433,11 @@ internal static partial class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static partial bool GetWindowRect(IntPtr window, out ScreenRect bounds);
 
+    /// <summary>Finds the window in the foreground, for the temporary flash trace.</summary>
+    /// <returns>The window, or zero.</returns>
+    [LibraryImport("user32.dll")]
+    internal static partial IntPtr GetForegroundWindow();
+
     /// <summary>Flash flag: flash the taskbar button.</summary>
     internal const uint FlashTray = 0x00000002;
 

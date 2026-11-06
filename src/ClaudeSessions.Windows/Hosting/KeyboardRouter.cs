@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Input;
@@ -66,6 +67,7 @@ internal sealed class KeyboardRouter : IDisposable
         }
         if (IsMousePress(message.message))
         {
+            FlashTrace.Write(string.Create(CultureInfo.InvariantCulture, $"press msg=0x{message.message:X} hwnd=0x{(long)message.hwnd:X}"));
             _mousePressed();
             return;
         }

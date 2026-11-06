@@ -432,4 +432,44 @@ internal static partial class NativeMethods
     [LibraryImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static partial bool GetWindowRect(IntPtr window, out ScreenRect bounds);
+
+    /// <summary>Virtual key of the left Ctrl key.</summary>
+    internal const int VkLeftControl = 0xA2;
+
+    /// <summary>Virtual key of the right Alt key, which is AltGr on the layouts that have one.</summary>
+    internal const int VkRightMenu = 0xA5;
+
+    /// <summary>ToUnicodeEx flag: leave the keyboard state alone, so a pending dead key survives the call.</summary>
+    internal const uint ToUnicodeKeepKeyboardState = 0x4;
+
+    /// <summary>Reads the state of a key for the calling thread.</summary>
+    /// <param name="virtualKey">The virtual key.</param>
+    /// <returns>Negative when the key is down.</returns>
+    [LibraryImport("user32.dll")]
+    internal static partial short GetKeyState(int virtualKey);
+
+    /// <summary>Reads the state of every key for the calling thread.</summary>
+    /// <param name="state">Receives 256 bytes, one per virtual key.</param>
+    /// <returns>True on success.</returns>
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool GetKeyboardState([Out] byte[] state);
+
+    /// <summary>Finds the keyboard layout of a thread.</summary>
+    /// <param name="threadId">The thread; 0 for the calling one.</param>
+    /// <returns>The layout.</returns>
+    [LibraryImport("user32.dll")]
+    internal static partial IntPtr GetKeyboardLayout(uint threadId);
+
+    /// <summary>Translates a key press into the characters it types.</summary>
+    /// <param name="virtualKey">The virtual key.</param>
+    /// <param name="scanCode">Its scan code.</param>
+    /// <param name="state">State of every key.</param>
+    /// <param name="buffer">Receives the characters.</param>
+    /// <param name="bufferSize">Size of the buffer, in characters.</param>
+    /// <param name="flags">Behaviour flags.</param>
+    /// <param name="layout">The keyboard layout.</param>
+    /// <returns>The number of characters; 0 for none, negative for a dead key.</returns>
+    [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)]
+    internal static partial int ToUnicodeEx(uint virtualKey, uint scanCode, [In] byte[] state, [Out] char[] buffer, int bufferSize, uint flags, IntPtr layout);
 }

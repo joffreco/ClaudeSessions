@@ -99,6 +99,14 @@ internal sealed class SessionWindowView : Window
     /// <summary>The tabs of the window, as the quick switcher lists them.</summary>
     public IEnumerable<TabSwitchEntry> SwitchEntries => Model.Tabs.Select(tab => new TabSwitchEntry(tab.Id, tab.DisplayTitle, tab.Cwd, _attention.AttentionOf(tab.Id)));
 
+    /// <summary>Sends typed text to the session of the selected tab.</summary>
+    /// <param name="text">The text.</param>
+    /// <returns>True when a session received it.</returns>
+    public bool TypeText(string text)
+    {
+        return SelectedTerminal()?.TypeText(text) ?? false;
+    }
+
     /// <summary>Runs a command on this window.</summary>
     /// <param name="command">The command.</param>
     /// <returns>True when the command applied and the key must not reach the terminal.</returns>

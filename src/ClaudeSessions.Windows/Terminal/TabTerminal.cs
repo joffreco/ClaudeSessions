@@ -111,6 +111,19 @@ internal sealed class TabTerminal : Border
         }
     }
 
+    /// <summary>Sends typed text to the session.</summary>
+    /// <param name="text">The text.</param>
+    /// <returns>True when a session runs and received it.</returns>
+    public bool TypeText(string text)
+    {
+        if (!IsRunning || _connection is null)
+        {
+            return false;
+        }
+        _connection.WriteInput(text);
+        return true;
+    }
+
     /// <summary>
     /// Asks the session to repaint its whole screen (Ctrl+L), at once when the terminal is shown, else
     /// when it next is. Needed after a remote desktop reconnection, which leaves the control black.

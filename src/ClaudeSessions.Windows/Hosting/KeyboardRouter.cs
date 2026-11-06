@@ -16,6 +16,8 @@ namespace ClaudeSessions.Windows.Hosting;
 /// sends the other wheel messages to the window under the mouse, as Windows Terminal does, so that an
 /// inactive window scrolls without a click, and rescales them to the lines per notch chosen in the menu.
 /// Also reports every mouse press in the app, the terminals included, whose messages WPF never sees.
+/// Characters typed with AltGr go straight to the session: through the terminal control they did not
+/// arrive, which { } [ ] on a Canadian Multilingual keyboard showed.
 /// </summary>
 internal sealed class KeyboardRouter : IDisposable
 {
@@ -72,12 +74,41 @@ internal sealed class KeyboardRouter : IDisposable
         }
         if (CommandOf(message) is not AppCommand command)
         {
+            if (AltGrTextOf(message) is string text)
+            {
+                handled = ActiveView()?.TypeText(text) ?? false;
+                return;
+            }
             RetargetWheel(ref message);
             RescaleWheel(ref message);
             return;
         }
-        SessionWindowView? active = Application.Current.Windows.OfType<SessionWindowView>().FirstOrDefault(view => view.IsActive);
-        handled = active?.TryExecute(command) ?? false;
+        handled = ActiveView()?.TryExecute(command) ?? false;
+    }
+
+    private static SessionWindowView? ActiveView()
+    {
+        return Application.Current.Windows.OfType<SessionWindowView>().FirstOrDefault(view => view.IsActive);
+    }
+
+    /// <summary>Gives the text a key press types with AltGr held; null for any other key, a dead key included.</summary>
+    private static string? AltGrTextOf(MSG message)
+    {
+        if (message.message is not (NativeMethods.WmKeyDown or NativeMethods.WmSysKeyDown)
+            || NativeMethods.GetKeyState(NativeMethods.VkRightMenu) >= 0
+            || NativeMethods.GetKeyState(NativeMethods.VkLeftControl) >= 0)
+        {
+            return null;
+        }
+        byte[] state = new byte[256];
+        if (!NativeMethods.GetKeyboardState(state))
+        {
+            return null;
+        }
+        char[] buffer = new char[8];
+        uint scanCode = (uint)(((long)message.lParam >> 16) & 0xFF);
+        int length = NativeMethods.ToUnicodeEx((uint)message.wParam, scanCode, state, buffer, buffer.Length, NativeMethods.ToUnicodeKeepKeyboardState, NativeMethods.GetKeyboardLayout(0));
+        return length > 0 && !char.IsControl(buffer[0]) ? new string(buffer, 0, length) : null;
     }
 
     private static bool IsMousePress(int message)

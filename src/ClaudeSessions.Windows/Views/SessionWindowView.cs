@@ -56,7 +56,7 @@ internal sealed class SessionWindowView : Window
     private bool _closeAllowed;
     private bool _flashing;
     private readonly DispatcherTimer _flashDelay = new() { Interval = FlashDelay };
-    private readonly DispatcherTimer _flashStopRepeat = new() { Interval = TimeSpan.FromMilliseconds(400) };
+    private readonly DispatcherTimer _flashStopRepeat = new() { Interval = TimeSpan.FromMilliseconds(100) };
     private int _flashStopsLeft;
 
     /// <summary>Creates the view of a window; its terminals start when their tab is shown.</summary>
@@ -302,7 +302,7 @@ internal sealed class SessionWindowView : Window
         {
             _flashing = false;
             CallFlashWindow(NativeMethods.FlashStop, 0);
-            _flashStopsLeft = 3;
+            _flashStopsLeft = 15;
             _flashStopRepeat.Start();
         }
     }

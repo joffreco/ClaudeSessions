@@ -24,6 +24,7 @@ namespace ClaudeSessions.Windows.Views;
 internal sealed class SessionWindowView : Window
 {
     private const double CaptionBarHeight = 36;
+    private const uint TaskbarFlashCount = 5;
     private static readonly int?[] WheelLineChoices = [1, 3, 5, 10, null];
     private static readonly Uri IconUri = new("pack://application:,,,/Assets/ClaudeSessions.ico");
 
@@ -49,6 +50,7 @@ internal sealed class SessionWindowView : Window
         UseAeroCaptionButtons = false,
     };
     private bool _closeAllowed;
+    private bool _flashing;
 
     /// <summary>Creates the view of a window; its terminals start when their tab is shown.</summary>
     /// <param name="coordinator">Runs the use cases behind the window.</param>
@@ -215,6 +217,7 @@ internal sealed class SessionWindowView : Window
         {
             _attention.Seen(watched);
         }
+        StopFlashingWhenSeen();
         RebuildTabStrip();
         foreach ((TabId tabId, TabTerminal terminal) in _terminals)
         {
@@ -283,13 +286,14 @@ internal sealed class SessionWindowView : Window
     }
 
     /// <summary>
-    /// Gives the keyboard back to the selected terminal when the window becomes active, and ends the
-    /// wait of the selected tab, which the user now sees.
+    /// Gives the keyboard back to the selected terminal when the window becomes active, stops the
+    /// flashing of its taskbar button, and ends the wait of the selected tab, which the user now sees.
     /// </summary>
     /// <param name="e">The activation event.</param>
     protected override void OnActivated(EventArgs e)
     {
         base.OnActivated(e);
+        StopFlashingWhenSeen();
         if (Model.SelectedTabId is not TabId selected)
         {
             return;
@@ -516,11 +520,27 @@ internal sealed class SessionWindowView : Window
 
     private void FlashTaskbarButton()
     {
+        _flashing = true;
+        CallFlashWindow(NativeMethods.FlashTray, TaskbarFlashCount);
+    }
+
+    private void StopFlashingWhenSeen()
+    {
+        if (_flashing && (IsActive || !Model.Tabs.Any(tab => _attention.IsWaiting(tab.Id))))
+        {
+            _flashing = false;
+            CallFlashWindow(NativeMethods.FlashStop, 0);
+        }
+    }
+
+    private void CallFlashWindow(uint flags, uint count)
+    {
         NativeMethods.FlashInfo info = new()
         {
             Size = (uint)Marshal.SizeOf<NativeMethods.FlashInfo>(),
             Window = new WindowInteropHelper(this).Handle,
-            Flags = NativeMethods.FlashTray | NativeMethods.FlashUntilForeground,
+            Flags = flags,
+            Count = count,
         };
         if (info.Window != IntPtr.Zero)
         {

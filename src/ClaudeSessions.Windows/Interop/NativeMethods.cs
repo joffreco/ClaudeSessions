@@ -424,10 +424,7 @@ internal static partial class NativeMethods
     /// <summary>Flash flag: flash the taskbar button.</summary>
     internal const uint FlashTray = 0x00000002;
 
-    /// <summary>Flash flag: flash until the window comes to the foreground.</summary>
-    internal const uint FlashUntilForeground = 0x0000000C;
-
-    /// <summary>Flash flag: stop flashing.</summary>
+    /// <summary>Flash flag: stop flashing and restore the taskbar button.</summary>
     internal const uint FlashStop = 0;
 
     /// <summary>Parameters of <see cref="FlashWindowEx"/> (FLASHWINFO).</summary>
@@ -443,7 +440,7 @@ internal static partial class NativeMethods
         /// <summary>What to flash, and until when.</summary>
         public uint Flags;
 
-        /// <summary>Number of flashes; 0 with <see cref="FlashUntilForeground"/>.</summary>
+        /// <summary>Number of flashes, after which the button stays highlighted.</summary>
         public uint Count;
 
         /// <summary>Flash period in milliseconds; 0 for the cursor blink rate.</summary>

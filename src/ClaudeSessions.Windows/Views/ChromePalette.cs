@@ -24,8 +24,14 @@ internal static class ChromePalette
     /// <summary>Background of a tab whose session finished working while nobody watched it.</summary>
     public static readonly Brush WaitingTab = Frozen(Color.FromRgb(0x1E, 0x4D, 0x24));
 
+    /// <summary>Background of a tab whose session asks for an approval while nobody watches it.</summary>
+    public static readonly Brush ApprovalTab = Frozen(Color.FromRgb(0x8A, 0x4B, 0x08));
+
     /// <summary>Badge of the taskbar button of a window with a waiting tab: a green dot with a dark ring.</summary>
-    public static readonly ImageSource WaitingBadge = Badge();
+    public static readonly ImageSource WaitingBadge = Badge(IdleMark);
+
+    /// <summary>Badge of the taskbar button of a window whose session asks for an approval: an orange dot with a dark ring.</summary>
+    public static readonly ImageSource ApprovalBadge = Badge(Frozen(Color.FromRgb(0xF7, 0x8C, 0x0C)));
 
     /// <summary>Background of the banner of a failed session.</summary>
     public static readonly Brush Banner = Frozen(Color.FromRgb(0x5A, 0x1D, 0x1D));
@@ -36,11 +42,11 @@ internal static class ChromePalette
     /// <summary>Background of the close button under the mouse.</summary>
     public static readonly Brush CloseHover = Frozen(Color.FromRgb(0xC4, 0x2B, 0x1C));
 
-    private static DrawingImage Badge()
+    private static DrawingImage Badge(Brush fill)
     {
         Pen ring = new(Frozen(Color.FromRgb(0x0C, 0x0C, 0x0C)), 2);
         ring.Freeze();
-        GeometryDrawing dot = new(IdleMark, ring, new EllipseGeometry(new Point(8, 8), 7, 7));
+        GeometryDrawing dot = new(fill, ring, new EllipseGeometry(new Point(8, 8), 7, 7));
         DrawingImage image = new(dot);
         image.Freeze();
         return image;

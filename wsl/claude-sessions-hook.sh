@@ -1,13 +1,17 @@
 #!/bin/bash
-# SessionStart hook: record which session runs in each ClaudeSessions tab, so the app follows /clear,
-# /resume and forks. Writes ~/.claude/session-tabs/<tab_id>.json on every SessionStart of a tab's own
-# claude; the app, not SessionEnd, removes the record. Silent, always exits 0.
+# SessionStart and PermissionRequest hook of the ClaudeSessions tabs, writing where the app watches:
+# $CLAUDE_SESSIONS_RECORDS, a Windows folder the app passes down through WSLENV. A tab started by an older
+# app has no such variable: its session is still recorded in ~/.claude/session-tabs, its approvals are not.
+# SessionStart: records which session runs in the tab, so the app follows /clear, /resume and forks, in
+# <tab_id>.json; the app, not SessionEnd, removes the record.
+# PermissionRequest: creates <tab_id>.approval, a one-shot signal the app reads and deletes; it decides
+# nothing, so Claude Code asks the user as usual. Silent, always exits 0.
 # Input (stdin JSON): { session_id, transcript_path, cwd, hook_event_name, source }
 # A session counts as a tab when CLAUDE_SESSIONS_TAB holds a UUID and the nearest ancestor named claude
 # has the PID in CLAUDE_SESSIONS_TAB_PID (both set by claude-sessions-tab): a background copy or a
 # nested claude inherits the variables but not the PID, and is ignored.
 
-tabs="${CLAUDE_SESSION_TABS:-$HOME/.claude/session-tabs}"
+tabs="${CLAUDE_SESSIONS_RECORDS:-$HOME/.claude/session-tabs}"
 uuid='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
 input=$(cat)
 field() { printf '%s' "$input" | jq -r --arg k "$1" '.[$k] // ""' 2>/dev/null; }
@@ -28,12 +32,17 @@ tab_session() {
   return 1
 }
 
-[ "$(field hook_event_name)" = "SessionStart" ] || exit 0
+event=$(field hook_event_name)
+[ "$event" = "SessionStart" ] || { [ "$event" = "PermissionRequest" ] && [ -n "$CLAUDE_SESSIONS_RECORDS" ]; } || exit 0
 [ "$CLAUDE_CODE_ENTRYPOINT" = "cli" ] || exit 0
 [[ "$(field session_id)" =~ ^[A-Za-z0-9-]+$ ]] || exit 0
 tab_session || exit 0
 
 mkdir -p "$tabs"
+if [ "$event" = "PermissionRequest" ]; then
+  : > "$tabs/$CLAUDE_SESSIONS_TAB.approval"
+  exit 0
+fi
 tmp=$(mktemp "$tabs/.tmp.XXXXXX") || exit 0
 if printf '%s' "$input" | jq --arg tab "$CLAUDE_SESSIONS_TAB" '{tab_id: $tab, session_id, cwd, transcript_path}' > "$tmp" 2>/dev/null; then
   mv -f "$tmp" "$tabs/$CLAUDE_SESSIONS_TAB.json"

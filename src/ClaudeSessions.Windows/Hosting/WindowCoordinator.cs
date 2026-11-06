@@ -198,6 +198,30 @@ internal sealed class WindowCoordinator
         delay.Start();
     }
 
+    /// <summary>Follows the new session of a tab as soon as the hook records it, and saves it.</summary>
+    /// <param name="tabId">The tab.</param>
+    public void OnSessionRecordChanged(TabId tabId)
+    {
+        _ = FollowRecordAsync(tabId);
+    }
+
+    /// <summary>Signals the approval a session asks for.</summary>
+    /// <param name="tabId">The tab.</param>
+    public void OnApprovalRequested(TabId tabId)
+    {
+        _views.Values.FirstOrDefault(view => view.Model.FindTab(tabId) is not null)?.ShowApprovalRequest(tabId);
+    }
+
+    private async Task FollowRecordAsync(TabId tabId)
+    {
+        if (_service.IsShuttingDown)
+        {
+            return;
+        }
+        await _service.SynchronizeAsync([tabId]).ConfigureAwait(true);
+        _service.Save();
+    }
+
     /// <summary>
     /// Removes the taskbar badge of every window, because the user just came back to the app. With
     /// grouped taskbar buttons the windows share one icon, so clearing one window could leave it badged.
@@ -422,7 +446,7 @@ internal sealed class WindowCoordinator
         _ = QuitAsync();
     }
 
-    /// <summary>Saves at once when Windows ends the session; nothing is read from WSL, which is going down too.</summary>
+    /// <summary>Saves at once when Windows ends the session; the records were followed as they changed.</summary>
     public void OnSessionEnding()
     {
         _service.BeginShutdown();

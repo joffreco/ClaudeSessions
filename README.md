@@ -24,12 +24,13 @@ The terminal is the Windows Terminal WPF control (same renderer as Windows Termi
 | Session fails (exit code other than 0) | Keeps the tab with a banner: **Reprendre**, **Nouvelle session ici**, **Fermer**. |
 | `/clear`, `/resume`, fork in a tab | Followed: the tab resumes the new session next time. |
 | A session finishes working while you do not watch it | Its tab turns green until you show it; when its window is not active, the window's taskbar button also gets a green dot until you click any window of the app. |
+| A session asks for an approval while you do not watch it | Its tab turns orange until you show it; when its window is not active, the taskbar button gets an orange dot at once, until you click any window of the app. |
 
 A tab resumes its session when a transcript of it exists (`~/.claude/projects/*/<session>.jsonl`), else it starts a new session under the same id. The tab title is the title the session sets, else the folder name. As in Windows Terminal, the tab shows the state mark Claude Code puts in front of its title: a green ✳ while the session waits for you, a spinner while it works. The mark is not saved, so a tab whose session has not started yet shows the title alone. The selected tab's title is in bold.
 
-A session finishes working when its spinner gives way to the ✳. If that happens in a hidden tab, or in the shown tab of a window that is not active, the tab gets a green background until you show it in an active window; the window's taskbar button also gets a green dot when the window is not active and the session stayed idle for 1.5 seconds. A click anywhere in the app, even in a window already active, or the activation of one of its windows removes the dot of every window at once; so does the end of the wait of all its tabs. The green tabs stay green until you show them. Windows does not draw the dot when the taskbar uses small icons. A session that starts idle, as a resumed one does, has finished nothing and is not signalled.
+A session finishes working when its spinner gives way to the ✳. If that happens in a hidden tab, or in the shown tab of a window that is not active, the tab gets a green background until you show it in an active window; the window's taskbar button also gets a green dot when the window is not active and the session stayed idle for 1.5 seconds. A click anywhere in the app, even in a window already active, or the activation of one of its windows removes the dot of every window at once; so does the end of the wait of all its tabs. The green tabs stay green until you show them. Windows does not draw the dot when the taskbar uses small icons. A session that starts idle, as a resumed one does, has finished nothing and is not signalled. Orange takes precedence over green, on the tab and on the dot, and only showing the tab ends it, since only you can answer.
 
-The app learns about `/clear`, `/resume` and forks from the `SessionStart` hook `wsl/claude-sessions-hook.sh`, which records the session of each tab in `~/.claude/session-tabs/<tab_id>.json`. The app reads these records every 30 seconds and when a window closes or the app quits, waiting at most 2 seconds; when a read fails, the tab keeps its last known session.
+The app learns about `/clear`, `/resume` and forks from the `SessionStart` hook `wsl/claude-sessions-hook.sh`, which records the session of each tab in `%LOCALAPPDATA%\ClaudeSessions\session-tabs\<tab_id>.json`. The app gives the hook this folder through the `CLAUDE_SESSIONS_RECORDS` variable and `WSLENV`, watches it, and follows a change as soon as it happens, then saves; a `/clear` done just before a shutdown is therefore kept. It also reads the records every 30 seconds and when a window closes or the app quits, in case a notification was missed; when a read fails, the tab keeps its last known session. The same hook, on `PermissionRequest`, creates `<tab_id>.approval` in that folder, which the app reads and deletes; it decides nothing, so Claude Code asks you as usual.
 
 ## Keyboard Shortcuts
 
@@ -64,7 +65,7 @@ wsl/claude-sessions-tab                          launcher run in WSL for each ta
 %LOCALAPPDATA%\ClaudeSessions\workspace.json     windows, tabs and closed tabs
 %LOCALAPPDATA%\ClaudeSessions\settings.json      settings
 %LOCALAPPDATA%\ClaudeSessions\preferences.json   zoom and lines per wheel notch, absent when neither is set
-~/.claude/session-tabs/<tab_id>.json             session of each tab, written by the hook
+%LOCALAPPDATA%\ClaudeSessions\session-tabs\      session of each tab and approval signals, written by the hook
 ```
 
 An unreadable `workspace.json` is set aside as `workspace.json.bad` and the app starts with a new window.
@@ -100,7 +101,7 @@ dotnet format ClaudeSessions.slnx --verify-no-changes
    ./wsl/setup.sh
    ```
 
-   It links the launcher into `~/.local/bin` and the hook into `~/.claude/hooks`, and registers the hook for `SessionStart` in `~/.claude/settings.json`, keeping the previous file as `settings.json.bak`. Running it again changes nothing.
+   It links the launcher into `~/.local/bin` and the hook into `~/.claude/hooks`, and registers the hook for `SessionStart` and `PermissionRequest` in `~/.claude/settings.json`, keeping the previous file as `settings.json.bak`. Running it again changes nothing.
 
 2. From Windows PowerShell, run the installer:
 
@@ -132,7 +133,6 @@ If another tool also reopens Claude sessions at logon (such as `claude-restore` 
 |-----|---------|---------|
 | `wslExecutable` | `wsl.exe` | Executable started for each tab |
 | `distro` | empty | WSL distribution; empty for the default distribution of WSL, read from the registry at each start |
-| `wslHome` | `/home/joff` | Home of the WSL user; the hook records are under `<wslHome>/.claude/session-tabs` |
 | `launcherPath` | `/home/joff/.local/bin/claude-sessions-tab` | WSL path of the launcher |
 | `defaultCwd` | `/home/joff/Sources` | Directory of the first tab of a new window |
 | `fontFamily` | `Cascadia Mono` | Terminal font |
@@ -147,7 +147,7 @@ The **☰** menu sets **Lignes par cran de molette**: 1, 3, 5 or 10 lines per wh
 Open two windows with two tabs each, run `/clear` in one tab, close one window, reopen it from **Fenêtres fermées**, quit with **Quitter**, start the app again, then reboot. Each time, the windows and tabs come back, and the tab where `/clear` ran resumes the new session.
 
 ```bash
-ls ~/.claude/session-tabs/
+ls "$(wslpath "$(cmd.exe /c echo %LOCALAPPDATA% 2>/dev/null | tr -d '\r')")/ClaudeSessions/session-tabs/"
 ```
 
 shows one record per tab that has started.
@@ -155,6 +155,6 @@ shows one record per tab that has started.
 ## Troubleshooting
 
 - **A tab shows « Session terminée »**: the launcher or `claude` failed. A deleted directory makes `wsl --cd` fail; choose **Nouvelle session ici** or close the tab.
-- **Tabs never follow `/clear`**: the hook is missing or is an older version. Run `./wsl/setup.sh` again, restart the sessions, and check that `~/.claude/session-tabs/` fills up.
-- **A `/clear` done just before a shutdown is lost**: the app does not read WSL at shutdown; the tab resumes the previous session.
+- **Tabs never follow `/clear`**: the hook is missing or is an older version. Run `./wsl/setup.sh` again, restart the sessions, and check that `%LOCALAPPDATA%\ClaudeSessions\session-tabs\` fills up.
+- **A tab never turns orange**: the hook is not registered for `PermissionRequest`. Run `./wsl/setup.sh` again; the tab must also have been started by this version of the app.
 - **Nothing happens on a second launch**: the running instance comes to the front instead; one instance runs per Windows session.

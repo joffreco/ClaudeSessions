@@ -213,6 +213,21 @@ internal sealed class SessionWindowView : Window
         RefreshChrome();
     }
 
+    /// <summary>
+    /// Signals that the session of a tab asks for an approval: its tab turns orange and, when the window
+    /// is not active, the taskbar button gets an orange badge at once, since the session is stuck meanwhile.
+    /// </summary>
+    /// <param name="tabId">The tab.</param>
+    public void ShowApprovalRequest(TabId tabId)
+    {
+        bool watched = tabId == Model.SelectedTabId && IsActive;
+        if (_attention.RequestApproval(tabId, watched) && !IsActive)
+        {
+            ShowBadgeIfStillWaiting();
+        }
+        RefreshChrome();
+    }
+
     /// <summary>Redraws the tab strip and shows the selected terminal, starting its session if needed.</summary>
     public void Refresh()
     {
@@ -520,6 +535,10 @@ internal sealed class SessionWindowView : Window
         {
             return ChromePalette.SelectedTab;
         }
+        if (_attention.AsksApproval(tabId))
+        {
+            return ChromePalette.ApprovalTab;
+        }
         return _attention.IsWaiting(tabId) ? ChromePalette.WaitingTab : ChromePalette.IdleTab;
     }
 
@@ -546,10 +565,11 @@ internal sealed class SessionWindowView : Window
     private void ShowBadgeIfStillWaiting()
     {
         _badgeDelay.Stop();
-        if (!IsActive && Model.Tabs.Any(tab => _attention.IsWaiting(tab.Id)))
+        if (IsActive || !Model.Tabs.Any(tab => _attention.IsWaiting(tab.Id)))
         {
-            _taskbarItem.Overlay = ChromePalette.WaitingBadge;
+            return;
         }
+        _taskbarItem.Overlay = Model.Tabs.Any(tab => _attention.AsksApproval(tab.Id)) ? ChromePalette.ApprovalBadge : ChromePalette.WaitingBadge;
     }
 
     private void UpdateBanner(TabId? selected)

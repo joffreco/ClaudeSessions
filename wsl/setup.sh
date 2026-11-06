@@ -1,7 +1,7 @@
 #!/bin/bash
 # Set up the WSL side of ClaudeSessions: link the tab launcher into ~/.local/bin, link the hook into
-# ~/.claude/hooks, and register the hook for SessionStart in ~/.claude/settings.json (a copy of the
-# previous file is kept as settings.json.bak). Running it again changes nothing.
+# ~/.claude/hooks, and register the hook for SessionStart and PermissionRequest in ~/.claude/settings.json
+# (a copy of the previous file is kept as settings.json.bak). Running it again changes nothing.
 set -euo pipefail
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -16,14 +16,16 @@ ln -sfn "$here/claude-sessions-tab" "$HOME/.local/bin/claude-sessions-tab"
 ln -sfn "$here/claude-sessions-hook.sh" "$HOME/.claude/hooks/claude-sessions-hook.sh"
 
 [ -f "$settings" ] || echo '{}' > "$settings"
-if jq -e --arg c "$command" '[.hooks.SessionStart[]?.hooks[]?.command] | index($c)' "$settings" > /dev/null; then
-  echo "hook already registered in $settings"
-else
-  cp "$settings" "$settings.bak"
-  tmp=$(mktemp "$settings.XXXXXX")
-  jq --arg c "$command" '.hooks.SessionStart += [{hooks: [{type: "command", command: $c, timeout: 10}]}]' "$settings" > "$tmp"
-  mv -f "$tmp" "$settings"
-  echo "hook registered in $settings (previous file: $settings.bak)"
-fi
+for event in SessionStart PermissionRequest; do
+  if jq -e --arg e "$event" --arg c "$command" '[.hooks[$e][]?.hooks[]?.command] | index($c)' "$settings" > /dev/null; then
+    echo "hook already registered for $event in $settings"
+  else
+    cp "$settings" "$settings.bak"
+    tmp=$(mktemp "$settings.XXXXXX")
+    jq --arg e "$event" --arg c "$command" '.hooks[$e] += [{hooks: [{type: "command", command: $c, timeout: 10}]}]' "$settings" > "$tmp"
+    mv -f "$tmp" "$settings"
+    echo "hook registered for $event in $settings (previous file: $settings.bak)"
+  fi
+done
 echo "launcher: $HOME/.local/bin/claude-sessions-tab -> $here/claude-sessions-tab"
 echo "hook:     $HOME/.claude/hooks/claude-sessions-hook.sh -> $here/claude-sessions-hook.sh"

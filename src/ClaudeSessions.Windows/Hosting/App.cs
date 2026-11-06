@@ -12,6 +12,7 @@ internal sealed class App : Application, IDisposable
     private readonly SingleInstanceGate _gate;
     private KeyboardRouter? _keyboard;
     private WindowCoordinator? _coordinator;
+    private SessionRecordWatcher? _records;
 
     private App(SingleInstanceGate gate)
     {
@@ -42,7 +43,9 @@ internal sealed class App : Application, IDisposable
     {
         base.OnStartup(e);
         AppSettings settings = AppSettingsFile.Load(AppPaths.SettingsFile, WslDefaultDistribution.Read());
-        HookFileTabSessionSource sessions = new(settings.SessionTabsDirectory);
+        Environment.SetEnvironmentVariable(WslEnvironment.RecordsVariable, AppPaths.SessionRecordsFolder);
+        Environment.SetEnvironmentVariable(WslEnvironment.ForwardVariable, WslEnvironment.ForwardRecords(Environment.GetEnvironmentVariable(WslEnvironment.ForwardVariable)));
+        HookFileTabSessionSource sessions = new(AppPaths.SessionRecordsFolder);
         WorkspaceService service = new(
             new JsonWorkspaceStore(AppPaths.WorkspaceFile),
             sessions,
@@ -57,6 +60,9 @@ internal sealed class App : Application, IDisposable
         _keyboard = new KeyboardRouter(wheel, _coordinator.ClearBadges);
         _coordinator.Start();
         WindowCoordinator coordinator = _coordinator;
+        _records = new SessionRecordWatcher(AppPaths.SessionRecordsFolder);
+        _records.RecordChanged += tabId => Dispatcher.BeginInvoke(() => coordinator.OnSessionRecordChanged(tabId));
+        _records.ApprovalRequested += tabId => Dispatcher.BeginInvoke(() => coordinator.OnApprovalRequested(tabId));
         _gate.ListenForActivation(() => Dispatcher.BeginInvoke(coordinator.Activate));
         SystemEvents.SessionSwitch += OnSessionSwitch;
     }
@@ -77,10 +83,11 @@ internal sealed class App : Application, IDisposable
         base.OnSessionEnding(e);
     }
 
-    /// <summary>Stops the keyboard routing and the session switch listening.</summary>
+    /// <summary>Stops the keyboard routing, the session switch listening and the watching of the hook records.</summary>
     public void Dispose()
     {
         SystemEvents.SessionSwitch -= OnSessionSwitch;
         _keyboard?.Dispose();
+        _records?.Dispose();
     }
 }

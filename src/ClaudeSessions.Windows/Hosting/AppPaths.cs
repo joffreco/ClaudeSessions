@@ -12,6 +12,9 @@ internal static class AppPaths
     /// <summary>The saved workspace.</summary>
     public static string WorkspaceFile => Path.Combine(DataFolder, "workspace.json");
 
+    /// <summary>Where the WSL hook writes the session of each tab and its approval requests.</summary>
+    public static string SessionRecordsFolder => Path.Combine(DataFolder, "session-tabs");
+
     /// <summary>The settings.</summary>
     public static string SettingsFile => Path.Combine(DataFolder, "settings.json");
 

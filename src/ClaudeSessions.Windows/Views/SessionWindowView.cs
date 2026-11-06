@@ -56,6 +56,8 @@ internal sealed class SessionWindowView : Window
     private bool _closeAllowed;
     private bool _flashing;
     private readonly DispatcherTimer _flashDelay = new() { Interval = FlashDelay };
+    private readonly DispatcherTimer _flashStopRepeat = new() { Interval = TimeSpan.FromMilliseconds(400) };
+    private int _flashStopsLeft;
 
     /// <summary>Creates the view of a window; its terminals start when their tab is shown.</summary>
     /// <param name="coordinator">Runs the use cases behind the window.</param>
@@ -77,6 +79,7 @@ internal sealed class SessionWindowView : Window
             AttachTerminal(tab);
         }
         _flashDelay.Tick += (_, _) => FlashIfStillWaiting();
+        _flashStopRepeat.Tick += (_, _) => RepeatFlashStop();
         Loaded += (_, _) => Refresh();
         LocationChanged += (_, _) => ReportBounds();
         SizeChanged += (_, _) => ReportBounds();
@@ -299,6 +302,8 @@ internal sealed class SessionWindowView : Window
         {
             _flashing = false;
             CallFlashWindow(NativeMethods.FlashStop, 0);
+            _flashStopsLeft = 3;
+            _flashStopRepeat.Start();
         }
     }
 
@@ -563,8 +568,20 @@ internal sealed class SessionWindowView : Window
         }
     }
 
+    /// <summary>A stop sent during the activation of the window may leave the button lit, so it is sent again shortly after.</summary>
+    private void RepeatFlashStop()
+    {
+        _flashStopsLeft--;
+        if (_flashStopsLeft <= 0)
+        {
+            _flashStopRepeat.Stop();
+        }
+        CallFlashWindow(NativeMethods.FlashStop, 0);
+    }
+
     private void FlashTaskbarButton()
     {
+        _flashStopRepeat.Stop();
         _flashing = true;
         Trace("flash start");
         CallFlashWindow(NativeMethods.FlashTray, TaskbarFlashCount);

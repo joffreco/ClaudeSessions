@@ -15,6 +15,7 @@ namespace ClaudeSessions.Windows.Hosting;
 /// the terminal is a native child window, so WPF bindings never fire while it has the focus. Also
 /// sends the other wheel messages to the window under the mouse, as Windows Terminal does, so that an
 /// inactive window scrolls without a click, and rescales them to the lines per notch chosen in the menu.
+/// Also reports every mouse press in the app, the terminals included, whose messages WPF never sees.
 /// </summary>
 internal sealed class KeyboardRouter : IDisposable
 {
@@ -39,12 +40,15 @@ internal sealed class KeyboardRouter : IDisposable
     };
 
     private readonly WheelScrollService _wheel;
+    private readonly Action _mousePressed;
 
-    /// <summary>Starts watching the keyboard and wheel messages of the UI thread.</summary>
+    /// <summary>Starts watching the keyboard and mouse messages of the UI thread.</summary>
     /// <param name="wheel">Lines per wheel notch.</param>
-    public KeyboardRouter(WheelScrollService wheel)
+    /// <param name="mousePressed">Called when a mouse button is pressed in a window of the app; the press still goes on.</param>
+    public KeyboardRouter(WheelScrollService wheel, Action mousePressed)
     {
         _wheel = wheel;
+        _mousePressed = mousePressed;
         ComponentDispatcher.ThreadPreprocessMessage += OnPreprocessMessage;
     }
 
@@ -60,6 +64,11 @@ internal sealed class KeyboardRouter : IDisposable
         {
             return;
         }
+        if (IsMousePress(message.message))
+        {
+            _mousePressed();
+            return;
+        }
         if (CommandOf(message) is not AppCommand command)
         {
             RetargetWheel(ref message);
@@ -68,6 +77,12 @@ internal sealed class KeyboardRouter : IDisposable
         }
         SessionWindowView? active = Application.Current.Windows.OfType<SessionWindowView>().FirstOrDefault(view => view.IsActive);
         handled = active?.TryExecute(command) ?? false;
+    }
+
+    private static bool IsMousePress(int message)
+    {
+        return message is NativeMethods.WmLeftButtonDown or NativeMethods.WmRightButtonDown or NativeMethods.WmMiddleButtonDown
+            or NativeMethods.WmNcLeftButtonDown or NativeMethods.WmNcRightButtonDown;
     }
 
     private static void RetargetWheel(ref MSG message)

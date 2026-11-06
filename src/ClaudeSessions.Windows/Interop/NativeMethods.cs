@@ -31,6 +31,18 @@ internal static partial class NativeMethods
     /// <summary>Window message: the mouse wheel turns.</summary>
     internal const int WmMouseWheel = 0x020A;
 
+    /// <summary>Window message: the left button is pressed over the client area.</summary>
+    internal const int WmLeftButtonDown = 0x0201;
+
+    /// <summary>Window message: the right button is pressed over the client area.</summary>
+    internal const int WmRightButtonDown = 0x0204;
+
+    /// <summary>Window message: the middle button is pressed over the client area.</summary>
+    internal const int WmMiddleButtonDown = 0x0207;
+
+    /// <summary>Window message: the right button is pressed over the non-client area.</summary>
+    internal const int WmNcRightButtonDown = 0x00A4;
+
     /// <summary>Window message: which part of the window lies under a point.</summary>
     internal const int WmNcHitTest = 0x0084;
 

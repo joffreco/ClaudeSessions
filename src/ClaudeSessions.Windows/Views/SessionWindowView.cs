@@ -9,6 +9,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shell;
 using System.Windows.Threading;
+using ClaudeSessions.Core.Application.Dto;
 using ClaudeSessions.Core.Domain;
 using ClaudeSessions.Windows.Hosting;
 using ClaudeSessions.Windows.Terminal;
@@ -95,6 +96,9 @@ internal sealed class SessionWindowView : Window
             && _statuses.TryGetValue(tab.Id, out SessionTitle? status) && status.Status is not null && !status.IsIdle)
         .Select(tab => tab.DisplayTitle);
 
+    /// <summary>The tabs of the window, as the quick switcher lists them.</summary>
+    public IEnumerable<TabSwitchEntry> SwitchEntries => Model.Tabs.Select(tab => new TabSwitchEntry(tab.Id, tab.DisplayTitle, tab.Cwd, _attention.AttentionOf(tab.Id)));
+
     /// <summary>Runs a command on this window.</summary>
     /// <param name="command">The command.</param>
     /// <returns>True when the command applied and the key must not reach the terminal.</returns>
@@ -132,6 +136,9 @@ internal sealed class SessionWindowView : Window
             case AppCommand.PreviousTab:
                 Model.SelectNeighbour(command == AppCommand.NextTab ? 1 : -1);
                 Refresh();
+                return true;
+            case AppCommand.SwitchTab:
+                _coordinator.OpenTabSwitcher(this);
                 return true;
             case AppCommand.Copy:
                 SelectedTerminal()?.CopySelection();
@@ -414,6 +421,7 @@ internal sealed class SessionWindowView : Window
         menu.Items.Add(MenuItem("Nouvel onglet", "Ctrl+Maj+T", () => TryExecute(AppCommand.NewTab)));
         menu.Items.Add(MenuItem("Nouvel onglet dans…", "Ctrl+Maj+O", () => TryExecute(AppCommand.NewTabIn)));
         menu.Items.Add(MenuItem("Nouvelle fenêtre", "Ctrl+Maj+N", () => TryExecute(AppCommand.NewWindow)));
+        menu.Items.Add(MenuItem("Aller à un onglet…", "Ctrl+Maj+P", () => TryExecute(AppCommand.SwitchTab)));
         menu.Items.Add(MenuItem("Rouvrir l'onglet fermé", "Ctrl+Maj+R", () => TryExecute(AppCommand.ReopenClosedTab)));
         menu.Items.Add(new Separator());
         menu.Items.Add(ClosedWindowsMenu());

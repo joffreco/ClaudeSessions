@@ -7,6 +7,7 @@ using System.Windows;
 using System.Windows.Threading;
 using ClaudeSessions.Adapters;
 using ClaudeSessions.Core.Application;
+using ClaudeSessions.Core.Application.Dto;
 using ClaudeSessions.Core.Domain;
 using ClaudeSessions.Windows.Terminal;
 using ClaudeSessions.Windows.Views;
@@ -196,6 +197,26 @@ internal sealed class WindowCoordinator
             }
         };
         delay.Start();
+    }
+
+    /// <summary>Lists the tabs of every open window, then shows the one chosen, in front.</summary>
+    /// <param name="view">Window the list is asked from; its tabs come first among equals.</param>
+    public void OpenTabSwitcher(SessionWindowView view)
+    {
+        List<TabSwitchEntry> entries = _views.Values
+            .OrderByDescending(other => ReferenceEquals(other, view))
+            .SelectMany(other => other.SwitchEntries)
+            .ToList();
+        if (TabSwitcher.Ask(view, entries) is not TabId chosen)
+        {
+            return;
+        }
+        SessionWindowView? target = _views.Values.FirstOrDefault(other => other.Model.FindTab(chosen) is not null);
+        if (target is not null)
+        {
+            SelectTab(target, chosen);
+            target.BringToFront();
+        }
     }
 
     /// <summary>Follows the new session of a tab as soon as the hook records it, and saves it.</summary>

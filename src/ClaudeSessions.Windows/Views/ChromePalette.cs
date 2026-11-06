@@ -24,6 +24,9 @@ internal static class ChromePalette
     /// <summary>Background of a tab whose session finished working while nobody watched it.</summary>
     public static readonly Brush WaitingTab = Frozen(Color.FromRgb(0x1E, 0x4D, 0x24));
 
+    /// <summary>The mark of a session that asks for an approval.</summary>
+    public static readonly Brush ApprovalMark = Frozen(Color.FromRgb(0xF7, 0x8C, 0x0C));
+
     /// <summary>Background of a tab whose session asks for an approval while nobody watches it.</summary>
     public static readonly Brush ApprovalTab = Frozen(Color.FromRgb(0x8A, 0x4B, 0x08));
 
@@ -31,7 +34,7 @@ internal static class ChromePalette
     public static readonly ImageSource WaitingBadge = Badge(IdleMark);
 
     /// <summary>Badge of the taskbar button of a window whose session asks for an approval: an orange dot with a dark ring.</summary>
-    public static readonly ImageSource ApprovalBadge = Badge(Frozen(Color.FromRgb(0xF7, 0x8C, 0x0C)));
+    public static readonly ImageSource ApprovalBadge = Badge(ApprovalMark);
 
     /// <summary>Background of the banner of a failed session.</summary>
     public static readonly Brush Banner = Frozen(Color.FromRgb(0x5A, 0x1D, 0x1D));

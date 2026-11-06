@@ -28,6 +28,7 @@ internal sealed class KeyboardRouter : IDisposable
         [(Key.N, ModifierKeys.Control | ModifierKeys.Shift)] = AppCommand.NewWindow,
         [(Key.Tab, ModifierKeys.Control)] = AppCommand.NextTab,
         [(Key.Tab, ModifierKeys.Control | ModifierKeys.Shift)] = AppCommand.PreviousTab,
+        [(Key.P, ModifierKeys.Control | ModifierKeys.Shift)] = AppCommand.SwitchTab,
         [(Key.C, ModifierKeys.Control | ModifierKeys.Shift)] = AppCommand.Copy,
         [(Key.V, ModifierKeys.Control | ModifierKeys.Shift)] = AppCommand.Paste,
         [(Key.Enter, ModifierKeys.None)] = AppCommand.ResumeFailed,

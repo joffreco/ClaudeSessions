@@ -41,6 +41,7 @@ The app learns about `/clear`, `/resume` and forks from the `SessionStart` hook 
 | `Ctrl+Shift+W` or middle click | Close the tab (tabs have no close button, so a stray click never ends a running session) |
 | `Ctrl+Shift+R` | Reopen the last closed tab |
 | `Ctrl+Shift+N` | New window |
+| `Ctrl+Shift+P` | Jump to a tab of any window: type to filter on the title or the folder, `↑` `↓` to move, `Enter` to go, `Esc` to cancel; tabs asking for an approval come first, then finished sessions |
 | Drag a tab | Move it within its window; the new order is saved at once |
 | `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab |
 | `Ctrl+Shift+C` / `Ctrl+Shift+V` | Copy the selection / paste |

@@ -24,6 +24,9 @@ internal enum AppCommand
     /// <summary>Previous tab (Ctrl+Shift+Tab).</summary>
     PreviousTab,
 
+    /// <summary>Jump to a tab of any window (Ctrl+Shift+P).</summary>
+    SwitchTab,
+
     /// <summary>Copy the selection (Ctrl+Shift+C).</summary>
     Copy,
 

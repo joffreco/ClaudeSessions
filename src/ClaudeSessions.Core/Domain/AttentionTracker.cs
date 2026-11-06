@@ -69,6 +69,18 @@ public sealed class AttentionTracker
         return _approvals.Contains(tabId);
     }
 
+    /// <summary>Tells what a tab expects from the user.</summary>
+    /// <param name="tabId">The tab.</param>
+    /// <returns>The most pressing of what it expects.</returns>
+    public TabAttention AttentionOf(TabId tabId)
+    {
+        if (_approvals.Contains(tabId))
+        {
+            return TabAttention.Approval;
+        }
+        return _waiting.Contains(tabId) ? TabAttention.Finished : TabAttention.None;
+    }
+
     /// <summary>Forgets a tab whose session ended or was replaced.</summary>
     /// <param name="tabId">The tab.</param>
     public void Forget(TabId tabId)

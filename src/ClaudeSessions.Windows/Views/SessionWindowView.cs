@@ -210,28 +210,19 @@ internal sealed class SessionWindowView : Window
             _badgeDelay.Stop();
             _badgeDelay.Start();
         }
-        Refresh();
+        RefreshChrome();
     }
 
     /// <summary>Redraws the tab strip and shows the selected terminal, starting its session if needed.</summary>
     public void Refresh()
     {
+        RefreshChrome();
         TabId? selected = Model.SelectedTabId;
-        if (selected is TabId watched && IsActive)
-        {
-            _attention.Seen(watched);
-        }
-        if (!Model.Tabs.Any(tab => _attention.IsWaiting(tab.Id)))
-        {
-            ClearBadge();
-        }
-        RebuildTabStrip();
         foreach ((TabId tabId, TabTerminal terminal) in _terminals)
         {
             terminal.Visibility = tabId == selected ? Visibility.Visible : Visibility.Collapsed;
         }
         UpdateBanner(selected);
-        Title = "Claude — " + (selected is TabId id ? Model.FindTab(id)?.DisplayTitle : "");
         if (selected is not TabId shown || !IsLoaded)
         {
             return;
@@ -530,6 +521,26 @@ internal sealed class SessionWindowView : Window
             return ChromePalette.SelectedTab;
         }
         return _attention.IsWaiting(tabId) ? ChromePalette.WaitingTab : ChromePalette.IdleTab;
+    }
+
+    /// <summary>
+    /// Redraws the tabs, the badge and the window title, without touching the terminals. A session
+    /// changes its title at each frame of its spinner; giving the terminal the focus each time would
+    /// disturb a mouse selection in progress.
+    /// </summary>
+    private void RefreshChrome()
+    {
+        TabId? selected = Model.SelectedTabId;
+        if (selected is TabId watched && IsActive)
+        {
+            _attention.Seen(watched);
+        }
+        if (!Model.Tabs.Any(tab => _attention.IsWaiting(tab.Id)))
+        {
+            ClearBadge();
+        }
+        RebuildTabStrip();
+        Title = "Claude — " + (selected is TabId id ? Model.FindTab(id)?.DisplayTitle : "");
     }
 
     private void ShowBadgeIfStillWaiting()

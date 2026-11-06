@@ -10,6 +10,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shell;
+using System.Windows.Threading;
 using ClaudeSessions.Core.Domain;
 using ClaudeSessions.Windows.Hosting;
 using ClaudeSessions.Windows.Interop;
@@ -25,6 +26,9 @@ internal sealed class SessionWindowView : Window
 {
     private const double CaptionBarHeight = 36;
     private const uint TaskbarFlashCount = 5;
+
+    /// <summary>How long a session must stay idle before the taskbar flashes: at the end of a turn, its title goes back and forth between the idle mark and the spinner.</summary>
+    private static readonly TimeSpan FlashDelay = TimeSpan.FromSeconds(1.5);
     private static readonly int?[] WheelLineChoices = [1, 3, 5, 10, null];
     private static readonly Uri IconUri = new("pack://application:,,,/Assets/ClaudeSessions.ico");
 
@@ -51,6 +55,7 @@ internal sealed class SessionWindowView : Window
     };
     private bool _closeAllowed;
     private bool _flashing;
+    private readonly DispatcherTimer _flashDelay = new() { Interval = FlashDelay };
 
     /// <summary>Creates the view of a window; its terminals start when their tab is shown.</summary>
     /// <param name="coordinator">Runs the use cases behind the window.</param>
@@ -71,6 +76,7 @@ internal sealed class SessionWindowView : Window
         {
             AttachTerminal(tab);
         }
+        _flashDelay.Tick += (_, _) => FlashIfStillWaiting();
         Loaded += (_, _) => Refresh();
         LocationChanged += (_, _) => ReportBounds();
         SizeChanged += (_, _) => ReportBounds();
@@ -209,7 +215,8 @@ internal sealed class SessionWindowView : Window
         }
         if (started && !IsActive)
         {
-            FlashTaskbarButton();
+            _flashDelay.Stop();
+            _flashDelay.Start();
         }
         Refresh();
     }
@@ -287,6 +294,7 @@ internal sealed class SessionWindowView : Window
     public void StopFlashing()
     {
         Trace("stop requested");
+        _flashDelay.Stop();
         if (_flashing)
         {
             _flashing = false;
@@ -544,6 +552,15 @@ internal sealed class SessionWindowView : Window
             return ChromePalette.SelectedTab;
         }
         return _attention.IsWaiting(tabId) ? ChromePalette.WaitingTab : ChromePalette.IdleTab;
+    }
+
+    private void FlashIfStillWaiting()
+    {
+        _flashDelay.Stop();
+        if (!IsActive && Model.Tabs.Any(tab => _attention.IsWaiting(tab.Id)))
+        {
+            FlashTaskbarButton();
+        }
     }
 
     private void FlashTaskbarButton()

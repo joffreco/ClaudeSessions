@@ -198,6 +198,18 @@ internal sealed class WindowCoordinator
         delay.Start();
     }
 
+    /// <summary>
+    /// Stops the taskbar flashing of every window, because the user just came back to the app. With
+    /// grouped taskbar buttons the windows share one icon, so stopping one window would leave it lit.
+    /// </summary>
+    public void StopFlashing()
+    {
+        foreach (SessionWindowView view in _views.Values)
+        {
+            view.StopFlashing();
+        }
+    }
+
     /// <summary>Creates the terminal of a tab, with the configured font at the current zoom.</summary>
     /// <returns>A terminal that runs nothing yet.</returns>
     public TabTerminal CreateTerminal()

@@ -217,7 +217,10 @@ internal sealed class SessionWindowView : Window
         {
             _attention.Seen(watched);
         }
-        StopFlashingWhenSeen();
+        if (!Model.Tabs.Any(tab => _attention.IsWaiting(tab.Id)))
+        {
+            StopFlashing();
+        }
         RebuildTabStrip();
         foreach ((TabId tabId, TabTerminal terminal) in _terminals)
         {
@@ -275,6 +278,16 @@ internal sealed class SessionWindowView : Window
         Close();
     }
 
+    /// <summary>Stops the flashing of the taskbar button and removes its highlight.</summary>
+    public void StopFlashing()
+    {
+        if (_flashing)
+        {
+            _flashing = false;
+            CallFlashWindow(NativeMethods.FlashStop, 0);
+        }
+    }
+
     /// <summary>Brings the window to the front.</summary>
     public void BringToFront()
     {
@@ -287,13 +300,13 @@ internal sealed class SessionWindowView : Window
 
     /// <summary>
     /// Gives the keyboard back to the selected terminal when the window becomes active, stops the
-    /// flashing of its taskbar button, and ends the wait of the selected tab, which the user now sees.
+    /// flashing of every window of the app, and ends the wait of the selected tab, which the user now sees.
     /// </summary>
     /// <param name="e">The activation event.</param>
     protected override void OnActivated(EventArgs e)
     {
         base.OnActivated(e);
-        StopFlashingWhenSeen();
+        _coordinator.StopFlashing();
         if (Model.SelectedTabId is not TabId selected)
         {
             return;
@@ -524,14 +537,6 @@ internal sealed class SessionWindowView : Window
         CallFlashWindow(NativeMethods.FlashTray, TaskbarFlashCount);
     }
 
-    private void StopFlashingWhenSeen()
-    {
-        if (_flashing && (IsActive || !Model.Tabs.Any(tab => _attention.IsWaiting(tab.Id))))
-        {
-            _flashing = false;
-            CallFlashWindow(NativeMethods.FlashStop, 0);
-        }
-    }
 
     private void CallFlashWindow(uint flags, uint count)
     {

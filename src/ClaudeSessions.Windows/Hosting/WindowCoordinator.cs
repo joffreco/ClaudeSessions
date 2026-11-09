@@ -341,6 +341,15 @@ internal sealed class WindowCoordinator
         }
     }
 
+    /// <summary>Repaints the terminals of every window in the theme of the mode in force.</summary>
+    public void RepaintTerminals()
+    {
+        foreach (SessionWindowView view in _views.Values)
+        {
+            view.RepaintTerminals();
+        }
+    }
+
     /// <summary>Builds the command line that runs the session of a tab.</summary>
     /// <param name="tabId">The tab.</param>
     /// <returns>The command line.</returns>

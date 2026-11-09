@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning 2.0.0](https://semver.org/spec/
 
 ### Changed
 
-- The app follows the Windows light/dark mode live: the chrome is repainted, the ☰ menu and dialogs use the Fluent theme, and the terminals stay dark as in Windows Terminal
+- The app follows the Windows light/dark mode live: the chrome is repainted, the ☰ menu and dialogs use the Fluent theme, and the terminals switch live too, Campbell in dark mode and One Half Light in light mode as in Windows Terminal, with the selected tab taking the terminal background
 - `wsl/setup.sh` links every skill of `skill/` and the `claude-sessions-activity` probe
 - `publish.sh` builds both executables, and the update from the ☰ menu updates both
 - The update from the ☰ menu also installs uncommitted changes: a repository with uncommitted files is never reported up to date, and the question names how many files the update installs

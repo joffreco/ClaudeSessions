@@ -65,7 +65,7 @@ A tab whose probe fails is left awake. A sleeping tab keeps its place and its se
 
 Every other key goes to the session.
 
-The app follows the Windows app mode (light or dark) live: the tab strip and window chrome repaint at once, and the **☰** menu and the dialogs take the matching Fluent theme when they open. The terminals stay dark in both modes.
+The app follows the Windows app mode (light or dark) live: the tab strip and window chrome repaint at once, and the **☰** menu and the dialogs take the matching Fluent theme when they open. The terminals follow it live too, with the Windows Terminal color schemes: Campbell in dark mode, One Half Light in light mode. The selected tab takes the terminal background, and a sleeping tab takes the mode in force when it wakes. Claude Code's own theme is chosen with `/theme` inside a session.
 
 ## Consignes
 

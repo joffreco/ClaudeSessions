@@ -9,7 +9,7 @@ namespace ClaudeSessions.Windows.Views;
 
 /// <summary>
 /// Light or dark look of the app, after the app mode of Windows. The chrome of the session windows follows a switch at
-/// once; menus and dialogs take the Fluent theme of the mode in force when they open.
+/// once, terminals included; menus and dialogs take the Fluent theme of the mode in force when they open.
 /// </summary>
 internal static class AppTheme
 {
@@ -27,14 +27,16 @@ internal static class AppTheme
 
     /// <summary>Puts the light or the dark mode in force; does nothing when it already is.</summary>
     /// <param name="dark">True for the dark mode.</param>
-    public static void Apply(bool dark)
+    /// <returns>True when the mode changed.</returns>
+    public static bool Apply(bool dark)
     {
         if (_dark == dark)
         {
-            return;
+            return false;
         }
         _dark = dark;
         ChromePalette.Apply(dark);
+        return true;
     }
 
     /// <summary>Gives an element and its content, such as a menu, the Fluent look of the mode in force.</summary>

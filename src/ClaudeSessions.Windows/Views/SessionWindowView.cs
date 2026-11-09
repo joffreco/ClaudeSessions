@@ -314,6 +314,15 @@ internal sealed class SessionWindowView : Window
         }
     }
 
+    /// <summary>Repaints every terminal of the window in the theme of the mode in force.</summary>
+    public void RepaintTerminals()
+    {
+        foreach (TabTerminal terminal in _terminals.Values)
+        {
+            terminal.Repaint();
+        }
+    }
+
     /// <summary>Asks every session of the window to repaint its screen, each when its tab is shown.</summary>
     public void RedrawAll()
     {

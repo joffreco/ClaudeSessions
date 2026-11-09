@@ -6,6 +6,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using ClaudeSessions.Adapters;
+using ClaudeSessions.Windows.Views;
 using Microsoft.Terminal.Wpf;
 
 namespace ClaudeSessions.Windows.Terminal;
@@ -36,7 +37,7 @@ internal sealed class TabTerminal : Border
     {
         _fontFamily = fontFamily;
         _fontSize = fontSize;
-        Background = new SolidColorBrush(ColorOf(TerminalThemes.BackgroundRgb));
+        Background = ChromePalette.SelectedTab;
         IsVisibleChanged += (_, _) => RedrawIfPending();
     }
 
@@ -125,6 +126,12 @@ internal sealed class TabTerminal : Border
         {
             ApplyFont(control, _connection);
         }
+    }
+
+    /// <summary>Repaints the running terminal in the theme of the mode in force; a later launch takes it anyway.</summary>
+    public void Repaint()
+    {
+        SetFontSize(_fontSize);
     }
 
     /// <summary>Gives the keyboard focus to the terminal.</summary>
@@ -252,7 +259,8 @@ internal sealed class TabTerminal : Border
 
     private void ApplyFont(TerminalControl control, ConPtyConnection connection)
     {
-        control.SetTheme(TerminalThemes.Campbell(), _fontFamily, _fontSize, ColorOf(TerminalThemes.BackgroundRgb));
+        bool dark = AppTheme.IsDark;
+        control.SetTheme(TerminalThemes.For(dark), _fontFamily, _fontSize, ColorOf(TerminalThemes.BackgroundOf(dark)));
         if (control.Rows > 0 && control.Columns > 0)
         {
             connection.Resize((uint)control.Rows, (uint)control.Columns);

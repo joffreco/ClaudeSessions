@@ -6,7 +6,7 @@ namespace ClaudeSessions.Windows.Views;
 /// <summary>
 /// Colors of the window around the terminals: tab strip, tabs, banner and window buttons. The brushes are shared and
 /// repainted in place when Windows switches between light and dark, so every element that uses one follows at once.
-/// The selected tab keeps the background of the terminals, which stay dark in both modes, as in Windows Terminal.
+/// The selected tab takes the background of the terminals, Campbell in the dark mode and One Half Light in the light one.
 /// The taskbar badges keep their own frozen colors: freezing an image freezes the brushes it holds.
 /// </summary>
 internal static class ChromePalette
@@ -61,10 +61,10 @@ internal static class ChromePalette
     public static void Apply(bool dark)
     {
         Paint(Chrome, dark, 0xFF1F1F1F, 0xFFF3F3F3);
-        Paint(SelectedTab, dark, 0xFF0C0C0C, 0xFF0C0C0C);
+        Paint(SelectedTab, dark, 0xFF0C0C0C, 0xFFFAFAFA);
         Paint(IdleTab, dark, 0xFF2D2D2D, 0xFFE3E3E3);
         Paint(Text, dark, 0xFFE0E0E0, 0xFF1A1A1A);
-        Paint(SelectedTabText, dark, 0xFFE0E0E0, 0xFFE0E0E0);
+        Paint(SelectedTabText, dark, 0xFFE0E0E0, 0xFF383A42);
         Paint(IdleMark, dark, 0xFF16C60C, 0xFF13A10E);
         Paint(WaitingTab, dark, 0xFF1E4D24, 0xFFC7E8CA);
         Paint(ApprovalMark, dark, 0xFFF78C0C, 0xFFD06A00);

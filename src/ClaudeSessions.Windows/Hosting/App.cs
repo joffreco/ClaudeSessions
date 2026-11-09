@@ -54,7 +54,7 @@ internal sealed class App : Application, IDisposable
             new GuidIdGenerator(),
             TimeProvider.System,
             settings.DefaultCwd);
-        AppTheme.Apply(WindowsAppMode.IsDark());
+        _ = AppTheme.Apply(WindowsAppMode.IsDark());
         JsonPreferencesStore preferences = new(AppPaths.PreferencesFile);
         WheelScrollService wheel = new(preferences);
         ZoomService zoom = new(preferences, settings.FontSize);
@@ -72,11 +72,19 @@ internal sealed class App : Application, IDisposable
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
     }
 
+    private void FollowWindowsMode()
+    {
+        if (AppTheme.Apply(WindowsAppMode.IsDark()))
+        {
+            _coordinator?.RepaintTerminals();
+        }
+    }
+
     private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
     {
         if (e.Category == UserPreferenceCategory.General)
         {
-            Dispatcher.BeginInvoke(() => AppTheme.Apply(WindowsAppMode.IsDark()));
+            Dispatcher.BeginInvoke(FollowWindowsMode);
         }
     }
 

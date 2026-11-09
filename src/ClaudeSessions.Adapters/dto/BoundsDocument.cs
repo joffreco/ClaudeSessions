@@ -17,4 +17,7 @@ public sealed record BoundsDocument
 
     /// <summary>True when the window is maximized.</summary>
     public bool Maximized { get; init; }
+
+    /// <summary>Unit of the coordinates, a <c>BoundsUnit</c> name; absent in files saved before it existed, which used device-independent pixels.</summary>
+    public string? Unit { get; init; }
 }

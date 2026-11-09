@@ -33,6 +33,7 @@ internal sealed class WindowCoordinator
     private readonly AppSettings _settings;
     private readonly ZoomService _zoom;
     private readonly WheelScrollService _wheel;
+    private readonly IdleSuspensionService _sleep;
     private readonly Dictionary<WindowId, SessionWindowView> _views = [];
     private readonly DispatcherTimer _timer;
     private bool _synchronizing;
@@ -44,13 +45,15 @@ internal sealed class WindowCoordinator
     /// <param name="settings">Settings of the application.</param>
     /// <param name="zoom">Font size of the terminals.</param>
     /// <param name="wheel">Lines per wheel notch.</param>
-    public WindowCoordinator(WorkspaceService service, WslCommandLine commandLine, AppSettings settings, ZoomService zoom, WheelScrollService wheel)
+    /// <param name="sleep">Picks the idle tabs to put to sleep.</param>
+    public WindowCoordinator(WorkspaceService service, WslCommandLine commandLine, AppSettings settings, ZoomService zoom, WheelScrollService wheel, IdleSuspensionService sleep)
     {
         _service = service;
         _commandLine = commandLine;
         _settings = settings;
         _zoom = zoom;
         _wheel = wheel;
+        _sleep = sleep;
         _timer = new DispatcherTimer { Interval = SynchronizationPeriod };
         _timer.Tick += async (_, _) => await SynchronizeAndSaveAsync().ConfigureAwait(true);
     }
@@ -308,6 +311,16 @@ internal sealed class WindowCoordinator
         _wheel.SetLinesPerNotch(lines);
     }
 
+    /// <summary>Hours of inactivity before a tab sleeps, or null when tabs never sleep.</summary>
+    public int? HoursBeforeSleep => _sleep.HoursBeforeSleep;
+
+    /// <summary>Chooses the hours of inactivity before a tab sleeps, in every window.</summary>
+    /// <param name="hours">Hours, or null so that tabs never sleep.</param>
+    public void SetHoursBeforeSleep(int? hours)
+    {
+        _sleep.SetHoursBeforeSleep(hours);
+    }
+
     /// <summary>Zooms the terminals of every window, the closed ones included once reopened.</summary>
     /// <param name="command">ZoomIn, ZoomOut or ResetZoom.</param>
     public void Zoom(AppCommand command)
@@ -375,6 +388,11 @@ internal sealed class WindowCoordinator
     public void SelectTab(SessionWindowView view, TabId tabId)
     {
         _service.SelectTab(view.Model.Id, tabId);
+        if (view.IsSleeping(tabId))
+        {
+            Relaunch(view, tabId);
+            return;
+        }
         view.Refresh();
     }
 
@@ -426,7 +444,7 @@ internal sealed class WindowCoordinator
         _service.ForgetWindow(windowId);
     }
 
-    /// <summary>Starts the session of a failed tab again.</summary>
+    /// <summary>Starts the session of a failed or sleeping tab again, resumed.</summary>
     /// <param name="view">The window.</param>
     /// <param name="tabId">The tab.</param>
     public void Relaunch(SessionWindowView view, TabId tabId)
@@ -555,10 +573,32 @@ internal sealed class WindowCoordinator
         {
             await _service.SynchronizeAsync(_views.Values.SelectMany(view => view.RunningTabIds).ToList()).ConfigureAwait(true);
             _service.Save();
+            await PutIdleTabsToSleepAsync().ConfigureAwait(true);
         }
         finally
         {
             _synchronizing = false;
+        }
+    }
+
+    private async Task PutIdleTabsToSleepAsync()
+    {
+        Dictionary<TabId, SessionWindowView> owners = [];
+        List<IdleCandidate> candidates = [];
+        foreach (SessionWindowView view in _views.Values)
+        {
+            foreach (IdleCandidate candidate in view.SleepCandidates())
+            {
+                owners[candidate.TabId] = view;
+                candidates.Add(candidate);
+            }
+        }
+        foreach (IdleCandidate idle in await _sleep.SelectAsync(candidates).ConfigureAwait(true))
+        {
+            if (!_service.IsShuttingDown && _views.ContainsValue(owners[idle.TabId]))
+            {
+                owners[idle.TabId].SleepIfUnchanged(idle);
+            }
         }
     }
 

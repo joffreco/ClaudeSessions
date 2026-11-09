@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
 using ClaudeSessions.Adapters.Consignes.Markdown;
+using ClaudeSessions.Consignes.Interfaces;
 using WpfList = System.Windows.Documents.List;
 using WpfListItem = System.Windows.Documents.ListItem;
 
@@ -15,7 +16,8 @@ namespace ClaudeSessions.Consignes.Views;
 
 /// <summary>
 /// Draws a consigne's blocks as a FlowDocument in the Fluent theme: each code block with a « Copier » button,
-/// each task with a box whose state the app keeps, and a bell after the box of a step whose tick wakes the session.
+/// each task with a box whose state the app keeps, and a bell after the box of a step whose tick wakes the session;
+/// each result field with a box to paste in and a button that sends it to the session.
 /// </summary>
 internal sealed class ConsigneDocumentBuilder
 {
@@ -25,23 +27,20 @@ internal sealed class ConsigneDocumentBuilder
 
     private const string CallbackHint = "Cocher cette case prévient la session.";
 
-    private readonly Func<int, bool> _isTicked;
-    private readonly Func<ListItemBlock, bool, bool> _tick;
+    private readonly IConsigneActions _actions;
 
-    private ConsigneDocumentBuilder(Func<int, bool> isTicked, Func<ListItemBlock, bool, bool> tick)
+    private ConsigneDocumentBuilder(IConsigneActions actions)
     {
-        _isTicked = isTicked;
-        _tick = tick;
+        _actions = actions;
     }
 
     /// <summary>Draws a body.</summary>
     /// <param name="document">The body, read.</param>
-    /// <param name="isTicked">Tells whether the task at a position is ticked.</param>
-    /// <param name="tick">Called when the user ticks or unticks a task, with its new state; false puts the box back.</param>
+    /// <param name="actions">What ticking a task or sending a result does.</param>
     /// <returns>The document.</returns>
-    public static FlowDocument Build(MarkdownDocument document, Func<int, bool> isTicked, Func<ListItemBlock, bool, bool> tick)
+    public static FlowDocument Build(MarkdownDocument document, IConsigneActions actions)
     {
-        ConsigneDocumentBuilder builder = new(isTicked, tick);
+        ConsigneDocumentBuilder builder = new(actions);
         FlowDocument flow = new()
         {
             FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI"),
@@ -73,6 +72,7 @@ internal sealed class ConsigneDocumentBuilder
             CodeBlock code => CodeOf(code),
             ListBlock list => ListOf(list),
             QuoteBlock quote => QuoteOf(quote),
+            ResultFieldBlock field => ResultFieldOf(field),
             _ => new BlockUIContainer(new Separator { Margin = new Thickness(0, 8, 0, 8) }),
         };
     }
@@ -208,7 +208,7 @@ internal sealed class ConsigneDocumentBuilder
     {
         CheckBox box = new()
         {
-            IsChecked = item.TickedInSource || _isTicked(index),
+            IsChecked = item.TickedInSource || _actions.IsTicked(index),
             IsEnabled = !item.TickedInSource,
             Margin = new Thickness(0, 0, 6, -4),
             MinWidth = 0,
@@ -231,7 +231,7 @@ internal sealed class ConsigneDocumentBuilder
     private void Tick(CheckBox box, ListItemBlock item)
     {
         bool ticked = box.IsChecked == true;
-        if (!_tick(item, ticked))
+        if (!_actions.Tick(item, ticked))
         {
             box.IsChecked = !ticked;
         }
@@ -254,6 +254,45 @@ internal sealed class ConsigneDocumentBuilder
         {
             paragraph.Inlines.Add(inline);
         }
+    }
+
+    private BlockUIContainer ResultFieldOf(ResultFieldBlock field)
+    {
+        TextBlock label = new() { Text = $"Résultat à coller : {field.Name}", FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 4) };
+        TextBox text = new()
+        {
+            Text = _actions.ResultOf(field.Name),
+            AcceptsReturn = true,
+            AcceptsTab = true,
+            FontFamily = CodeFont,
+            FontSize = CodeSize,
+            TextWrapping = TextWrapping.NoWrap,
+            MinHeight = 90,
+            MaxHeight = 320,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        };
+        Button send = new() { Content = "Envoyer à la session", HorizontalAlignment = HorizontalAlignment.Left, Margin = new Thickness(0, 6, 0, 0), Padding = new Thickness(12, 4, 12, 4) };
+        send.IsEnabled = text.Text.Trim().Length > 0;
+        text.TextChanged += (_, _) =>
+        {
+            send.IsEnabled = text.Text.Trim().Length > 0;
+            send.Content = "Envoyer à la session";
+        };
+        send.Click += (_, _) =>
+        {
+            if (_actions.SendResult(field.Name, text.Text))
+            {
+                send.Content = $"Envoyé ✓ {DateTime.Now:HH:mm}";
+            }
+        };
+        StackPanel panel = new();
+        panel.Children.Add(label);
+        panel.Children.Add(text);
+        panel.Children.Add(send);
+        Border border = new() { Child = panel, Padding = new Thickness(10), CornerRadius = new CornerRadius(4), BorderThickness = new Thickness(1) };
+        border.SetResourceReference(Border.BorderBrushProperty, "AccentFillColorDefaultBrush");
+        return new BlockUIContainer(border) { Margin = new Thickness(0, 4, 0, 12) };
     }
 
     private Section QuoteOf(QuoteBlock quote)

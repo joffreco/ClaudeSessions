@@ -2,7 +2,9 @@ using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Threading;
 using ClaudeSessions.Adapters;
 using Microsoft.Terminal.Wpf;
 
@@ -10,7 +12,8 @@ namespace ClaudeSessions.Windows.Terminal;
 
 /// <summary>
 /// The terminal of one tab: a Windows Terminal control connected to the session process. Each
-/// launch gets a fresh control and a fresh process; events are raised on the UI thread.
+/// launch gets a fresh control and a fresh process; events are raised on the UI thread. A sleeping
+/// terminal has neither: it shows a placeholder until it is launched again.
 /// </summary>
 internal sealed class TabTerminal : Border
 {
@@ -24,6 +27,7 @@ internal sealed class TabTerminal : Border
     private TerminalControl? _connectedControl;
     private ConPtyConnection? _connection;
     private bool _redrawPending;
+    private DateTimeOffset _lastTouched;
 
     /// <summary>Creates an empty terminal; nothing runs until <see cref="Launch"/>.</summary>
     /// <param name="fontFamily">Font of the terminal.</param>
@@ -45,8 +49,14 @@ internal sealed class TabTerminal : Border
     /// <summary>True once a process was launched and until it ends or is killed.</summary>
     public bool IsRunning { get; private set; }
 
-    /// <summary>True once the tab has launched a process at least once.</summary>
+    /// <summary>True once the tab has launched a process, until it is put to sleep.</summary>
     public bool WasLaunched { get; private set; }
+
+    /// <summary>True from the moment the tab is put to sleep until its next launch.</summary>
+    public bool IsSleeping { get; private set; }
+
+    /// <summary>Last launch, keystroke or look of the user at the terminal.</summary>
+    public DateTimeOffset LastTouched => _lastTouched;
 
     /// <summary>Starts the session process in a fresh terminal, ending any previous one.</summary>
     /// <param name="commandLine">Full command line of the process.</param>
@@ -55,9 +65,18 @@ internal sealed class TabTerminal : Border
         Kill();
         OscTitleParser titles = new();
         ConPtyConnection connection = new(commandLine);
-        connection.OutputObserved += data => OnOutputObserved(titles, data);
+        bool titled = false;
+        connection.OutputObserved += data =>
+        {
+            if (OnOutputObserved(titles, data) && !titled)
+            {
+                titled = true;
+                FocusOnceReady(connection);
+            }
+        };
         connection.Exited += code => Dispatcher.BeginInvoke(() => OnExited(connection, code));
         connection.StartFailed += reason => Dispatcher.BeginInvoke(() => OnExited(connection, -1));
+        connection.InputWritten += Touch;
         TerminalControl control = new() { Focusable = true };
         control.Loaded += (_, _) => Connect(control, connection);
         _connection = connection;
@@ -65,6 +84,28 @@ internal sealed class TabTerminal : Border
         Child = control;
         IsRunning = true;
         WasLaunched = true;
+        IsSleeping = false;
+        Touch();
+    }
+
+    /// <summary>
+    /// Puts the tab to sleep: ends the process and destroys the terminal control, so that both free
+    /// their memory, and shows a placeholder until the next <see cref="Launch"/>.
+    /// </summary>
+    /// <param name="placeholder">What the tab shows while it sleeps.</param>
+    public void Sleep(UIElement placeholder)
+    {
+        Kill();
+        DestroyControl();
+        Child = placeholder;
+        WasLaunched = false;
+        IsSleeping = true;
+    }
+
+    /// <summary>Records that the user is looking at the terminal.</summary>
+    public void MarkSeen()
+    {
+        Touch();
     }
 
     /// <summary>Ends the process without raising <see cref="Exited"/>.</summary>
@@ -134,6 +175,37 @@ internal sealed class TabTerminal : Border
         RedrawIfPending();
     }
 
+    private void Touch()
+    {
+        _lastTouched = DateTimeOffset.UtcNow;
+    }
+
+    private void DestroyControl()
+    {
+        if (_control is not TerminalControl control)
+        {
+            return;
+        }
+        Child = null;
+        DisposeHosts(control);
+        _control = null;
+        _connectedControl = null;
+    }
+
+    private static void DisposeHosts(DependencyObject parent)
+    {
+        for (int index = 0; index < VisualTreeHelper.GetChildrenCount(parent); index++)
+        {
+            DependencyObject child = VisualTreeHelper.GetChild(parent, index);
+            if (child is HwndHost host)
+            {
+                host.Dispose();
+                continue;
+            }
+            DisposeHosts(child);
+        }
+    }
+
     private void RedrawIfPending()
     {
         if (!_redrawPending || !IsVisible)
@@ -157,10 +229,25 @@ internal sealed class TabTerminal : Border
         ApplyFont(control, connection);
         control.Connection = connection;
         _connectedControl = control;
-        if (control.IsVisible && Window.GetWindow(control)?.IsActive == true)
+        FocusOnceReady(connection);
+    }
+
+    /// <summary>
+    /// Gives the keyboard to a new terminal once its native window exists: at Loaded it may not yet, and
+    /// a focus given then reaches WPF but not the terminal. Asked again at the first title, when Claude
+    /// Code shows its prompt. Only the shown terminal of the active window takes it, so the focus is never
+    /// taken from another tab or window.
+    /// </summary>
+    /// <param name="connection">Connection of the launch the focus belongs to; a later launch cancels it.</param>
+    private void FocusOnceReady(ConPtyConnection connection)
+    {
+        Dispatcher.BeginInvoke(DispatcherPriority.Input, () =>
         {
-            control.Focus();
-        }
+            if (ReferenceEquals(_connection, connection) && _control is TerminalControl control && control.IsVisible && Window.GetWindow(control)?.IsActive == true)
+            {
+                control.Focus();
+            }
+        });
     }
 
     private void ApplyFont(TerminalControl control, ConPtyConnection connection)
@@ -195,13 +282,15 @@ internal sealed class TabTerminal : Border
         }
     }
 
-    private void OnOutputObserved(OscTitleParser titles, string data)
+    private bool OnOutputObserved(OscTitleParser titles, string data)
     {
         string? title = titles.Feed(data);
-        if (title is not null)
+        if (title is null)
         {
-            Dispatcher.BeginInvoke(() => TitleChanged?.Invoke(title));
+            return false;
         }
+        Dispatcher.BeginInvoke(() => TitleChanged?.Invoke(title));
+        return true;
     }
 
     private void OnExited(ConPtyConnection connection, int exitCode)

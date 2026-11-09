@@ -255,7 +255,7 @@ internal sealed class MainWindow : Window, IBoardView
         MarkdownDocument document = MarkdownReader.Read(consigne.Body);
         FlowDocumentScrollViewer viewer = new()
         {
-            Document = ConsigneDocumentBuilder.Build(document, index => _controller.IsTicked(consigne.Key, index), (item, ticked) => Tick(consigne, item, ticked)),
+            Document = ConsigneDocumentBuilder.Build(document, new ShownConsigneActions(_controller, consigne.Key, this)),
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             IsToolBarVisible = false,
         };
@@ -287,20 +287,6 @@ internal sealed class MainWindow : Window, IBoardView
         header.Children.Add(titles);
         header.Children.Add(actions);
         return header;
-    }
-
-    private bool Tick(Consigne consigne, ListItemBlock item, bool ticked)
-    {
-        if (item.TaskIndex is not int index)
-        {
-            return false;
-        }
-        if (_controller.Tick(consigne.Key, index, ticked, item.Callback ? item.Text : null) is string failure)
-        {
-            MessageBox.Show(this, "La session n'a pas pu être prévenue : la case reste décochée.\n\n" + failure, AppTitle, MessageBoxButton.OK, MessageBoxImage.Error);
-            return false;
-        }
-        return true;
     }
 
     private async System.Threading.Tasks.Task ArchiveAsync(Consigne consigne)

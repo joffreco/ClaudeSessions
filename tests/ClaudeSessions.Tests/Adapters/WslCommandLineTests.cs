@@ -67,6 +67,28 @@ public sealed class WslCommandLineTests
         Assert.StartsWith("C:\\Windows\\System32\\wsl.exe -d Ubuntu --cd / -e /opt/tab ", commandLine, StringComparison.Ordinal);
     }
 
+    /// <summary>The activity probe runs in the configured distribution with the tab and its session.</summary>
+    [Fact]
+    public void Builds_the_activity_probe_arguments()
+    {
+        WslCommandLine builder = new(new AppSettings { Distro = "Debian" });
+
+        string[] arguments = builder.ActivityArguments(Tab, Session);
+
+        Assert.Equal(["-d", "Debian", "-e", "/home/joff/.local/bin/claude-sessions-activity", "11111111-2222-3333-4444-555555555555", "aaaaaaaa-0000-0000-0000-000000000001"], arguments);
+    }
+
+    /// <summary>Without a configured distribution, the probe runs in the WSL default one.</summary>
+    [Fact]
+    public void Leaves_out_the_distribution_of_the_probe_when_none_is_set()
+    {
+        WslCommandLine builder = new(new AppSettings { Distro = "", ActivityProbePath = "/opt/probe" });
+
+        string[] arguments = builder.ActivityArguments(Tab, Session);
+
+        Assert.Equal(["-e", "/opt/probe", "11111111-2222-3333-4444-555555555555", "aaaaaaaa-0000-0000-0000-000000000001"], arguments);
+    }
+
     private static readonly InstallSource Repository = new("Ubuntu-24.04", "/home/joff/Projets/ClaudeSessions");
     private const string Installed = "8a668b19fdbf795c1a680501f17d2a21f0ea2220";
 

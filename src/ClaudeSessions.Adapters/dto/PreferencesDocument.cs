@@ -8,4 +8,7 @@ public sealed record PreferencesDocument
 
     /// <summary>Lines scrolled per wheel notch, or null to follow Windows.</summary>
     public int? WheelLines { get; init; }
+
+    /// <summary>Hours of inactivity before a tab is put to sleep, or null when tabs never sleep.</summary>
+    public int? SuspendAfterHours { get; init; }
 }

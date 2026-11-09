@@ -31,7 +31,7 @@ ClaudeSessions tab; the Consignes app shows it with a copy button per code block
   clears it, amended if the review changed it.
 - **Done.** When the user says the procedure is done or abandoned, archive it with `consigne done <id>`.
 
-## Callback on a ticked step
+## Callback on a ticked step or a pasted result
 
 - **Mark a step** with `<!-- callback -->` at the end of its task line (`- [ ] Lancer la migration <!-- callback -->`)
   only when you must act the moment the user ticks it: check its result, or give the next step depending on
@@ -44,6 +44,12 @@ ClaudeSessions tab; the Consignes app shows it with a copy button per code block
     background.
   - code 4: no tick within the timeout (3600 s by default); run it again if the procedure is still under way.
   - code 3: the consigne was archived; stop.
+- **Ask for a result.** When the user must hand back output, such as the rows of a SQL query, put
+  `<!-- result: <name> -->` on its own line right after that step (indented under it when the step is a
+  list item; `<name>` is short, lowercase, `a-z0-9-`). The app shows a box to paste in and a button
+  « Envoyer à la session ». Each field counts in `callbacks:`, so the `wait` above is already running; it
+  ends with `Résultat « <name> » collé :` followed by the pasted text. Read it, act on it, and run `wait`
+  again. Never ask the user to paste a result in the conversation when a field can take it.
 - Keep one `wait` per consigne. A new version under the same id keeps the running `wait`; start one only
   if none is running. Ticks made while no `wait` runs are not lost: the next `wait` gives them at once.
 
@@ -55,8 +61,8 @@ consigne put --title "<titre court>" --id <id> [--status en-revision|prete] <<'C
 CONSIGNE
 consigne list          # this session's consignes: id, status, title
 consigne done <id>     # archive one
-consigne wait <fichier> [--timeout <s>]   # in the background: ends on the next marked tick (0), archive (3), timeout (4)
+consigne wait <fichier> [--timeout <s>]   # in the background: ends on the next marked tick or sent result (0), archive (3), timeout (4)
 ```
 
 Use a quoted heredoc delimiter (`<<'CONSIGNE'`) so that nothing in the Markdown is expanded by the shell.
-`put` prints the id, the file and the number of marked steps (`callbacks:`); it fails with code 2 on a bad id, an empty body or a missing title.
+`put` prints the id, the file and the number of marked steps and result fields (`callbacks:`); it fails with code 2 on a bad id, an empty body or a missing title.

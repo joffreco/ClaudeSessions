@@ -12,8 +12,10 @@
 # UUID et l'ancêtre nommé claude le plus proche a le PID de CLAUDE_SESSIONS_TAB_PID ; un claude imbriqué ou en
 # arrière-plan hérite des variables mais pas du PID.
 #
-# Une étape marquée « <!-- callback --> » réveille la session quand l'utilisateur la coche : l'app ajoute une
-# ligne JSON à <id>.events.jsonl, et wait, lancé en arrière-plan, rend les lignes pas encore vues puis s'arrête
+# Une étape marquée « <!-- callback --> » réveille la session quand l'utilisateur la coche, et une ligne
+# « <!-- result: <nom> --> » ouvre un champ où il colle un résultat (lignes d'une requête SQL) qu'il envoie à la
+# session : l'app ajoute une ligne JSON à <id>.events.jsonl, et wait, lancé en arrière-plan, rend les lignes
+# pas encore vues (« Étape N cochée : … » ou « Résultat « nom » collé : » suivi du texte) puis s'arrête
 # (0). Elle s'arrête aussi quand la consigne est archivée (3) ou au bout du timeout, 3600 s par défaut (4).
 #
 # Variables : CONSIGNES_ROOT (défaut ~/.claude/consignes), CLAUDE_SESSION_TABS (défaut ~/.claude/session-tabs),
@@ -168,6 +170,7 @@ callback_count() {
   awk '
     /^[[:space:]]*(```|~~~)/ { fenced = !fenced; next }
     !fenced && /^[[:space:]]*([-*+]|[0-9]+[.)])[[:space:]]+\[[ xX]\].*<!--[[:space:]]*callback[[:space:]]*-->/ { count++ }
+    !fenced && /^[[:space:]]*<!--[[:space:]]*result([[:space:]]*:[[:space:]]*[a-z0-9][a-z0-9-]*)?[[:space:]]*-->[[:space:]]*$/ { count++ }
     END { print count + 0 }
   '
 }
@@ -188,7 +191,9 @@ new_ticks() {
   [ -f "$events" ] && total=$(wc -l < "$events") || return 1
   [ "$total" -gt "$seen" ] || return 1
   sed -n "$((seen + 1)),${total}p" "$events" \
-    | jq -r '"Étape \((.index // 0) + 1) cochée : \(.text // "")"' 2>/dev/null
+    | jq -r 'if .kind == "result"
+        then "Résultat « \(.name // "") » collé :\n\(.text // "")"
+        else "Étape \((.index // 0) + 1) cochée : \(.text // "")" end' 2>/dev/null
   printf '%s\n' "$total" > "$seen_file"
 }
 

@@ -29,8 +29,8 @@ internal sealed class TabSwitcher : Window
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         Background = ChromePalette.Chrome;
-        _filter = new TextBox { Margin = new Thickness(8), Padding = new Thickness(4), Background = ChromePalette.SelectedTab, Foreground = ChromePalette.Text, CaretBrush = ChromePalette.Text };
-        _list = new ListBox { Margin = new Thickness(8, 0, 8, 8), MaxHeight = 440, Background = ChromePalette.SelectedTab, Foreground = ChromePalette.Text, BorderThickness = new Thickness(0), HorizontalContentAlignment = HorizontalAlignment.Stretch };
+        _filter = new TextBox { Margin = new Thickness(8), Padding = new Thickness(4), Background = ChromePalette.Field, Foreground = ChromePalette.Text, CaretBrush = ChromePalette.Text };
+        _list = new ListBox { Margin = new Thickness(8, 0, 8, 8), MaxHeight = 440, Background = ChromePalette.Field, Foreground = ChromePalette.Text, BorderThickness = new Thickness(0), HorizontalContentAlignment = HorizontalAlignment.Stretch };
         DockPanel layout = new();
         DockPanel.SetDock(_filter, Dock.Top);
         layout.Children.Add(_filter);
@@ -88,7 +88,7 @@ internal sealed class TabSwitcher : Window
         };
     }
 
-    private static Brush AttentionBrush(TabAttention attention)
+    private static SolidColorBrush AttentionBrush(TabAttention attention)
     {
         return attention switch
         {

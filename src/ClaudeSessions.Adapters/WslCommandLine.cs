@@ -1,5 +1,6 @@
 using System.Linq;
 using ClaudeSessions.Core.Application.Dto;
+using ClaudeSessions.Core.Domain;
 
 namespace ClaudeSessions.Adapters;
 
@@ -20,17 +21,25 @@ public sealed class WslCommandLine
     /// <returns>wsl.exe -d &lt;distro&gt; --cd &lt;cwd&gt; -e &lt;launcher&gt; &lt;tab&gt; &lt;session&gt;, each part quoted; without -d when no distribution is set.</returns>
     public string Build(TabLaunchRequest request)
     {
-        string[] distro = string.IsNullOrEmpty(_settings.Distro) ? [] : ["-d", _settings.Distro];
         string[] arguments =
         [
             _settings.WslExecutable,
-            .. distro,
+            .. Distribution(),
             "--cd", request.Cwd,
             "-e", _settings.LauncherPath,
             request.TabId.ToString(),
             request.SessionId.ToString(),
         ];
         return string.Join(' ', arguments.Select(WindowsArgumentQuoter.Quote));
+    }
+
+    /// <summary>Builds the arguments of wsl.exe that report the recent activity of a tab's session.</summary>
+    /// <param name="tabId">The tab.</param>
+    /// <param name="sessionId">Session the tab runs.</param>
+    /// <returns>The arguments, one per entry, for a process start that quotes them itself; without -d when no distribution is set.</returns>
+    public string[] ActivityArguments(TabId tabId, SessionId sessionId)
+    {
+        return [.. Distribution(), "-e", _settings.ActivityProbePath, tabId.ToString(), sessionId.ToString()];
     }
 
     /// <summary>
@@ -55,6 +64,11 @@ public sealed class WslCommandLine
     public static string[] PublishArguments(InstallSource source)
     {
         return [.. InRepository(source), "bash", "-lc", "./publish.sh"];
+    }
+
+    private string[] Distribution()
+    {
+        return string.IsNullOrEmpty(_settings.Distro) ? [] : ["-d", _settings.Distro];
     }
 
     private static string[] InRepository(InstallSource source)

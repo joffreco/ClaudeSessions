@@ -2,6 +2,7 @@ using System;
 using System.Windows;
 using ClaudeSessions.Adapters;
 using ClaudeSessions.Core.Application;
+using ClaudeSessions.Windows.Views;
 using Microsoft.Win32;
 
 namespace ClaudeSessions.Windows.Hosting;
@@ -53,10 +54,13 @@ internal sealed class App : Application, IDisposable
             new GuidIdGenerator(),
             TimeProvider.System,
             settings.DefaultCwd);
+        AppTheme.Apply(WindowsAppMode.IsDark());
         JsonPreferencesStore preferences = new(AppPaths.PreferencesFile);
         WheelScrollService wheel = new(preferences);
         ZoomService zoom = new(preferences, settings.FontSize);
-        _coordinator = new WindowCoordinator(service, new WslCommandLine(settings), settings, zoom, wheel);
+        WslCommandLine commandLine = new(settings);
+        IdleSuspensionService sleep = new(preferences, new WslTabActivityProbe(settings.WslExecutable, commandLine), TimeProvider.System);
+        _coordinator = new WindowCoordinator(service, commandLine, settings, zoom, wheel, sleep);
         _keyboard = new KeyboardRouter(wheel, _coordinator.ClearBadges);
         _coordinator.Start();
         WindowCoordinator coordinator = _coordinator;
@@ -65,6 +69,15 @@ internal sealed class App : Application, IDisposable
         _records.ApprovalRequested += tabId => Dispatcher.BeginInvoke(() => coordinator.OnApprovalRequested(tabId));
         _gate.ListenForActivation(() => Dispatcher.BeginInvoke(coordinator.Activate));
         SystemEvents.SessionSwitch += OnSessionSwitch;
+        SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
+    }
+
+    private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
+    {
+        if (e.Category == UserPreferenceCategory.General)
+        {
+            Dispatcher.BeginInvoke(() => AppTheme.Apply(WindowsAppMode.IsDark()));
+        }
     }
 
     private void OnSessionSwitch(object sender, SessionSwitchEventArgs e)
@@ -83,10 +96,11 @@ internal sealed class App : Application, IDisposable
         base.OnSessionEnding(e);
     }
 
-    /// <summary>Stops the keyboard routing, the session switch listening and the watching of the hook records.</summary>
+    /// <summary>Stops the keyboard routing, the session switch and theme listening and the watching of the hook records.</summary>
     public void Dispose()
     {
         SystemEvents.SessionSwitch -= OnSessionSwitch;
+        SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
         _keyboard?.Dispose();
         _records?.Dispose();
     }

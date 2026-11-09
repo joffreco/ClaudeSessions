@@ -47,4 +47,56 @@ public sealed class ReadingStateTests
         Assert.Equal(["t/kept"], state.Seen.Keys);
         Assert.Empty(state.Ticked);
     }
+
+    /// <summary>A result sent again for the same field replaces the previous one.</summary>
+    [Fact]
+    public void ResentResultReplacesThePreviousOne()
+    {
+        ReadingState state = new();
+        ConsigneKey key = new("tab", "one");
+        state.SetResult(key, "comptes", "1");
+
+        state.SetResult(key, "comptes", "2");
+
+        Assert.Equal("2", state.ResultOf(key, "comptes"));
+    }
+
+    /// <summary>A field with no sent result reads as empty.</summary>
+    [Fact]
+    public void UnsentFieldReadsEmpty()
+    {
+        ReadingState state = new();
+        ConsigneKey key = new("tab", "one");
+        state.SetResult(key, "comptes", "1");
+
+        string result = state.ResultOf(key, "autre");
+
+        Assert.Equal("", result);
+    }
+
+    /// <summary>A result belongs to its consigne: the same field of another consigne reads as empty.</summary>
+    [Fact]
+    public void ResultIsKeptPerConsigne()
+    {
+        ReadingState state = new();
+        state.SetResult(new ConsigneKey("tab", "one"), "comptes", "1");
+
+        string result = state.ResultOf(new ConsigneKey("tab", "two"), "comptes");
+
+        Assert.Equal("", result);
+    }
+
+    /// <summary>A result is forgotten with its consigne.</summary>
+    [Fact]
+    public void ResultIsForgottenWithItsConsigne()
+    {
+        ReadingState state = new();
+        ConsigneKey key = new("tab", "one");
+        state.SetResult(key, "comptes", "1");
+
+        bool changed = state.Retain(new HashSet<string>());
+
+        Assert.True(changed);
+        Assert.Equal("", state.ResultOf(key, "comptes"));
+    }
 }

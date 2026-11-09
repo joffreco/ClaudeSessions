@@ -11,15 +11,16 @@ namespace ClaudeSessions.Tests.Consignes.Adapters;
 /// <summary>Saving and loading what the user did with the consignes.</summary>
 public sealed class JsonReadingStateStoreTests
 {
-    /// <summary>Seen versions and ticked tasks survive a save and a load.</summary>
+    /// <summary>Seen versions, ticked tasks and sent results survive a save and a load.</summary>
     [Fact]
     public void RoundTrips()
     {
         using TempFolder folder = new();
         JsonReadingStateStore store = new(Path.Combine(folder.Path, "sub", "state.json"));
         DateTimeOffset seen = new(2026, 11, 4, 10, 0, 0, TimeSpan.FromHours(-5));
-        ReadingState state = new(new Dictionary<string, DateTimeOffset> { ["tab/one"] = seen }, []);
+        ReadingState state = new(new Dictionary<string, DateTimeOffset> { ["tab/one"] = seen }, [], []);
         state.SetTicked(new ConsigneKey("tab", "one"), 2, true);
+        state.SetResult(new ConsigneKey("tab", "one"), "comptes", "id | n\n1 | 42");
 
         store.Save(state);
         ReadingState loaded = store.Load();
@@ -27,6 +28,7 @@ public sealed class JsonReadingStateStoreTests
         Assert.Equal(seen, loaded.Seen["tab/one"]);
         Assert.True(loaded.IsTicked(new ConsigneKey("tab", "one"), 2));
         Assert.False(loaded.IsTicked(new ConsigneKey("tab", "one"), 1));
+        Assert.Equal("id | n\n1 | 42", loaded.ResultOf(new ConsigneKey("tab", "one"), "comptes"));
     }
 
     /// <summary>A missing or broken file loads as an empty state.</summary>

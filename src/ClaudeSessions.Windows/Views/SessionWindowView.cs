@@ -18,7 +18,8 @@ namespace ClaudeSessions.Windows.Views;
 
 /// <summary>
 /// A window of the application: a strip of tabs, a banner for a failed session, and one terminal
-/// per tab, only the selected one visible. A tab starts its session the first time it is shown.
+/// per tab, only the selected one visible. A tab starts its session the first time it is shown; a
+/// tab put to sleep starts it again when clicked or woken from its placeholder.
 /// </summary>
 internal sealed class SessionWindowView : Window
 {
@@ -27,6 +28,7 @@ internal sealed class SessionWindowView : Window
     /// <summary>How long a session must stay idle before the taskbar badge shows: at the end of a turn, its title goes back and forth between the idle mark and the spinner.</summary>
     private static readonly TimeSpan BadgeDelay = TimeSpan.FromSeconds(1.5);
     private static readonly int?[] WheelLineChoices = [1, 3, 5, 10, null];
+    private static readonly int?[] SleepHourChoices = [1, 2, 4, 8, 24, null];
     private static readonly Uri IconUri = new("pack://application:,,,/Assets/ClaudeSessions.ico");
 
     private readonly WindowCoordinator _coordinator;
@@ -68,7 +70,7 @@ internal sealed class SessionWindowView : Window
         WorkAreaMaximizer.Attach(this);
         _root.Child = BuildLayout();
         Content = _root;
-        ApplyBounds(model.Bounds);
+        PlaceAtStart(model.Bounds);
         foreach (SessionTab tab in model.Tabs)
         {
             AttachTerminal(tab);
@@ -89,6 +91,39 @@ internal sealed class SessionWindowView : Window
 
     /// <summary>Tabs whose session process runs right now.</summary>
     public IEnumerable<TabId> RunningTabIds => _terminals.Where(pair => pair.Value.IsRunning).Select(pair => pair.Key);
+
+    /// <summary>Running tabs, as the idle suspension needs to judge them.</summary>
+    /// <returns>One candidate per running tab.</returns>
+    public IReadOnlyList<IdleCandidate> SleepCandidates()
+    {
+        return Model.Tabs
+            .Where(tab => _terminals.TryGetValue(tab.Id, out TabTerminal? terminal) && terminal.IsRunning)
+            .Select(tab => new IdleCandidate(tab.Id, tab.SessionId, WaitsForUser(tab.Id), IsOnScreen(tab.Id), _terminals[tab.Id].LastTouched))
+            .ToList();
+    }
+
+    /// <summary>Puts a tab to sleep, unless it changed since it was judged idle.</summary>
+    /// <param name="candidate">The tab as it was judged.</param>
+    public void SleepIfUnchanged(IdleCandidate candidate)
+    {
+        TabId tabId = candidate.TabId;
+        if (!_terminals.TryGetValue(tabId, out TabTerminal? terminal) || !terminal.IsRunning
+            || terminal.LastTouched != candidate.LastTouched || IsOnScreen(tabId) || !WaitsForUser(tabId))
+        {
+            return;
+        }
+        _statuses.Remove(tabId);
+        terminal.Sleep(new SleepingPanel(() => _coordinator.Relaunch(this, tabId)));
+        Refresh();
+    }
+
+    /// <summary>Tells whether a tab is asleep.</summary>
+    /// <param name="tabId">The tab.</param>
+    /// <returns>True when the tab was put to sleep and not launched since.</returns>
+    public bool IsSleeping(TabId tabId)
+    {
+        return _terminals.TryGetValue(tabId, out TabTerminal? terminal) && terminal.IsSleeping;
+    }
 
     /// <summary>Titles of the running tabs whose session is working, by the spinner in their last title.</summary>
     public IEnumerable<string> BusyTabTitles => Model.Tabs
@@ -258,12 +293,13 @@ internal sealed class SessionWindowView : Window
             return;
         }
         TabTerminal current = _terminals[shown];
-        if (!current.WasLaunched)
+        if (!current.WasLaunched && !current.IsSleeping)
         {
             current.Launch(_coordinator.CommandLineFor(shown));
         }
         if (IsActive)
         {
+            current.MarkSeen();
             current.FocusTerminal();
         }
     }
@@ -426,6 +462,7 @@ internal sealed class SessionWindowView : Window
     private void OpenMenu(Button anchor)
     {
         ContextMenu menu = new() { PlacementTarget = anchor };
+        AppTheme.Dress(menu);
         menu.Items.Add(MenuItem("Nouvel onglet", "Ctrl+Maj+T", () => TryExecute(AppCommand.NewTab)));
         menu.Items.Add(MenuItem("Nouvel onglet dans…", "Ctrl+Maj+O", () => TryExecute(AppCommand.NewTabIn)));
         menu.Items.Add(MenuItem("Nouvelle fenêtre", "Ctrl+Maj+N", () => TryExecute(AppCommand.NewWindow)));
@@ -434,6 +471,7 @@ internal sealed class SessionWindowView : Window
         menu.Items.Add(new Separator());
         menu.Items.Add(ClosedWindowsMenu());
         menu.Items.Add(WheelLinesMenu());
+        menu.Items.Add(SleepMenu());
         menu.Items.Add(new Separator());
         menu.Items.Add(ConsignesMenuItem());
         menu.Items.Add(new Separator());
@@ -476,15 +514,44 @@ internal sealed class SessionWindowView : Window
 
     private MenuItem WheelLinesMenu()
     {
-        MenuItem wheel = new() { Header = "Lignes par cran de molette" };
-        foreach (int? lines in WheelLineChoices)
+        return ChoiceMenu(
+            "Lignes par cran de molette",
+            WheelLineChoices,
+            lines => lines is int count ? $"{count} {(count == 1 ? "ligne" : "lignes")}" : $"Réglage Windows ({SystemParameters.WheelScrollLines})",
+            _coordinator.WheelLines,
+            _coordinator.SetWheelLines);
+    }
+
+    private MenuItem SleepMenu()
+    {
+        return ChoiceMenu(
+            "Veille des onglets inactifs",
+            SleepHourChoices,
+            hours => hours is int count ? $"Après {count} h" : "Jamais",
+            _coordinator.HoursBeforeSleep,
+            _coordinator.SetHoursBeforeSleep);
+    }
+
+    private static MenuItem ChoiceMenu(string header, int?[] choices, Func<int?, string> label, int? current, Action<int?> choose)
+    {
+        MenuItem parent = new() { Header = header };
+        foreach (int? choice in choices)
         {
-            string label = lines is int count ? $"{count} {(count == 1 ? "ligne" : "lignes")}" : $"Réglage Windows ({SystemParameters.WheelScrollLines})";
-            MenuItem entry = MenuItem(label, "", () => _coordinator.SetWheelLines(lines));
-            entry.IsChecked = _coordinator.WheelLines == lines;
-            wheel.Items.Add(entry);
+            MenuItem entry = MenuItem(label(choice), "", () => choose(choice));
+            entry.IsChecked = current == choice;
+            parent.Items.Add(entry);
         }
-        return wheel;
+        return parent;
+    }
+
+    private bool WaitsForUser(TabId tabId)
+    {
+        return _statuses.TryGetValue(tabId, out SessionTitle? status) && status.IsIdle;
+    }
+
+    private bool IsOnScreen(TabId tabId)
+    {
+        return IsActive && Model.SelectedTabId == tabId;
     }
 
     private static MenuItem MenuItem(string header, string gesture, System.Action action)
@@ -535,11 +602,12 @@ internal sealed class SessionWindowView : Window
         TabId tabId = tab.Id;
         string prefix = _failures.ContainsKey(tabId) ? "⚠ " : "";
         StackPanel label = new() { Orientation = Orientation.Horizontal };
+        Brush text = tabId == Model.SelectedTabId ? ChromePalette.SelectedTabText : ChromePalette.Text;
         if (_statuses.TryGetValue(tabId, out SessionTitle? status) && status.Status is string mark)
         {
-            label.Children.Add(new TextBlock { Text = mark, Foreground = status.IsIdle ? ChromePalette.IdleMark : ChromePalette.Text, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center });
+            label.Children.Add(new TextBlock { Text = mark, Foreground = status.IsIdle ? ChromePalette.IdleMark : text, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center });
         }
-        label.Children.Add(new TextBlock { Text = prefix + tab.DisplayTitle, Foreground = ChromePalette.Text, FontWeight = tabId == Model.SelectedTabId ? FontWeights.SemiBold : FontWeights.Normal, VerticalAlignment = VerticalAlignment.Center });
+        label.Children.Add(new TextBlock { Text = prefix + tab.DisplayTitle, Foreground = text, FontWeight = tabId == Model.SelectedTabId ? FontWeights.SemiBold : FontWeights.Normal, VerticalAlignment = VerticalAlignment.Center });
         Border header = new()
         {
             Child = label,
@@ -563,7 +631,7 @@ internal sealed class SessionWindowView : Window
         return header;
     }
 
-    private Brush TabBackground(TabId tabId)
+    private SolidColorBrush TabBackground(TabId tabId)
     {
         if (tabId == Model.SelectedTabId)
         {
@@ -627,6 +695,23 @@ internal sealed class SessionWindowView : Window
         return Model.SelectedTabId is TabId tabId ? Model.FindTab(tabId)?.Cwd ?? _coordinator.DefaultCwd : _coordinator.DefaultCwd;
     }
 
+    private void PlaceAtStart(WindowBounds bounds)
+    {
+        if (bounds.Unit != BoundsUnit.DevicePixels)
+        {
+            ApplyBounds(bounds);
+            return;
+        }
+        WindowState = bounds.Maximized ? WindowState.Maximized : WindowState.Normal;
+        SourceInitialized += (_, _) =>
+        {
+            if (!WindowPlacer.TryRestore(this, bounds))
+            {
+                ApplyBounds(WindowBounds.Default with { Maximized = bounds.Maximized });
+            }
+        };
+    }
+
     private void ApplyBounds(WindowBounds bounds)
     {
         WindowBounds visible = ScreenBounds.KeepVisible(bounds);
@@ -649,11 +734,9 @@ internal sealed class SessionWindowView : Window
 
     private void ReportBounds()
     {
-        if (!IsLoaded)
+        if (IsLoaded && WindowPlacer.Read(this) is WindowBounds bounds)
         {
-            return;
+            _coordinator.UpdateBounds(this, bounds);
         }
-        Rect normal = WindowState == WindowState.Normal ? new Rect(Left, Top, Width, Height) : RestoreBounds;
-        _coordinator.UpdateBounds(this, new WindowBounds(normal.Left, normal.Top, normal.Width, normal.Height, WindowState == WindowState.Maximized));
     }
 }

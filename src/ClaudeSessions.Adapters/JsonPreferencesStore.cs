@@ -39,7 +39,7 @@ public sealed class JsonPreferencesStore : IPreferencesStore
         try
         {
             PreferencesDocument? document = JsonSerializer.Deserialize<PreferencesDocument>(File.ReadAllText(_path), SerializerOptions);
-            return document is null ? ViewPreferences.None : new ViewPreferences(document.FontSize, document.WheelLines);
+            return document is null ? ViewPreferences.None : new ViewPreferences(document.FontSize, document.WheelLines, document.SuspendAfterHours);
         }
         catch (JsonException)
         {
@@ -60,7 +60,7 @@ public sealed class JsonPreferencesStore : IPreferencesStore
         {
             Directory.CreateDirectory(folder);
         }
-        PreferencesDocument document = new() { FontSize = preferences.FontSize, WheelLines = preferences.WheelLines };
+        PreferencesDocument document = new() { FontSize = preferences.FontSize, WheelLines = preferences.WheelLines, SuspendAfterHours = preferences.SuspendAfterHours };
         File.WriteAllText(_path, JsonSerializer.Serialize(document, SerializerOptions));
     }
 }

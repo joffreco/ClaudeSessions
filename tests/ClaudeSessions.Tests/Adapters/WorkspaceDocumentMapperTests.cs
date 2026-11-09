@@ -30,6 +30,48 @@ public sealed class WorkspaceDocumentMapperTests
         Assert.Equal("Fix the hook", workspace.Windows[0].Tabs[0].Title);
     }
 
+    /// <summary>Bounds kept in device pixels come back in device pixels, with their values.</summary>
+    [Fact]
+    public void Keeps_bounds_saved_in_device_pixels()
+    {
+        SessionWindow window = TestData.Window(WindowStatus.Open, TestData.Tab());
+        window.Bounds = new WindowBounds(-3840, 961, 1536, 900, true, BoundsUnit.DevicePixels);
+        WorkspaceDocument document = WorkspaceDocumentMapper.ToDocument(new Workspace([window], []));
+
+        Workspace workspace = WorkspaceDocumentMapper.ToWorkspace(document);
+
+        Assert.Equal(new WindowBounds(-3840, 961, 1536, 900, true, BoundsUnit.DevicePixels), workspace.Windows[0].Bounds);
+    }
+
+    /// <summary>Bounds saved before the unit existed are read as device-independent pixels, as they were written.</summary>
+    [Fact]
+    public void Reads_bounds_without_a_unit_as_device_independent()
+    {
+        WorkspaceDocument document = WorkspaceDocumentMapper.ToDocument(new Workspace([TestData.Window(WindowStatus.Open, TestData.Tab())], []));
+        document.Windows[0] = document.Windows[0] with { Bounds = new BoundsDocument { Left = -2783.2, Top = 969.6, Width = 768, Height = 825.6 } };
+
+        Workspace workspace = WorkspaceDocumentMapper.ToWorkspace(document);
+
+        Assert.Equal(new WindowBounds(-2783.2, 969.6, 768, 825.6, false, BoundsUnit.DeviceIndependent), workspace.Windows[0].Bounds);
+    }
+
+    /// <summary>An unknown unit, or a number outside the enumeration, falls back to device-independent pixels instead of refusing the workspace.</summary>
+    /// <param name="unit">The saved unit.</param>
+    [Theory]
+    [InlineData("Inches")]
+    [InlineData("devicepixels")]
+    [InlineData("7")]
+    [InlineData("")]
+    public void Reads_an_unknown_unit_as_device_independent(string unit)
+    {
+        WorkspaceDocument document = WorkspaceDocumentMapper.ToDocument(new Workspace([TestData.Window(WindowStatus.Open, TestData.Tab())], []));
+        document.Windows[0] = document.Windows[0] with { Bounds = document.Windows[0].Bounds with { Unit = unit } };
+
+        Workspace workspace = WorkspaceDocumentMapper.ToWorkspace(document);
+
+        Assert.Equal(BoundsUnit.DeviceIndependent, workspace.Windows[0].Bounds.Unit);
+    }
+
     /// <summary>A window with an unknown status is refused.</summary>
     [Fact]
     public void Refuses_an_unknown_window_status()

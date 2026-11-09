@@ -20,6 +20,11 @@ public sealed class FakeConsigneSource(IReadOnlyList<Consigne> consignes) : ICon
     }
 
     /// <inheritdoc/>
+    public void SendResult(ConsigneKey key, PastedResult result)
+    {
+    }
+
+    /// <inheritdoc/>
     public void Archive(ConsigneKey key)
     {
     }

@@ -15,6 +15,11 @@ public interface IConsigneSource
     /// <param name="tick">The step ticked.</param>
     void SendTick(ConsigneKey key, StepTick tick);
 
+    /// <summary>Hands the session that deposited a consigne a result the user pasted in one of its fields.</summary>
+    /// <param name="key">The consigne.</param>
+    /// <param name="result">The result.</param>
+    void SendResult(ConsigneKey key, PastedResult result);
+
     /// <summary>Moves a consigne, and what the user ticked in it, to its folder's archive.</summary>
     /// <param name="key">The consigne.</param>
     void Archive(ConsigneKey key);

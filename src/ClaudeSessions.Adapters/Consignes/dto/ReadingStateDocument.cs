@@ -11,4 +11,7 @@ public sealed record ReadingStateDocument
 
     /// <summary>Gets the ticked task indexes of each consigne, by key.</summary>
     public Dictionary<string, List<int>> Ticked { get; init; } = [];
+
+    /// <summary>Gets the results sent from each consigne's fields, by key, then by field name.</summary>
+    public Dictionary<string, Dictionary<string, string>> Results { get; init; } = [];
 }

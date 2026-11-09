@@ -49,6 +49,7 @@ public sealed class WorkspaceDocumentMapper
                 Width = window.Bounds.Width,
                 Height = window.Bounds.Height,
                 Maximized = window.Bounds.Maximized,
+                Unit = window.Bounds.Unit.ToString(),
             },
             SelectedTabId = window.SelectedTabId?.ToString(),
             Tabs = window.Tabs.Select(ToDocument).ToList(),
@@ -88,9 +89,14 @@ public sealed class WorkspaceDocumentMapper
         return new SessionWindow(
             RequireWindowId(document.Id),
             status,
-            new WindowBounds(bounds.Left, bounds.Top, bounds.Width, bounds.Height, bounds.Maximized),
+            new WindowBounds(bounds.Left, bounds.Top, bounds.Width, bounds.Height, bounds.Maximized, UnitOf(bounds)),
             tabs,
             selected);
+    }
+
+    private static BoundsUnit UnitOf(BoundsDocument bounds)
+    {
+        return Enum.TryParse(bounds.Unit, false, out BoundsUnit unit) && Enum.IsDefined(unit) ? unit : BoundsUnit.DeviceIndependent;
     }
 
     private static SessionTab ToTab(TabDocument document)

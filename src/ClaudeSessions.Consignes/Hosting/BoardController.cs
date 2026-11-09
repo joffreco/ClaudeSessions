@@ -85,6 +85,35 @@ internal sealed class BoardController
         return _state.IsTicked(key, index);
     }
 
+    /// <summary>The result last sent from a consigne's field.</summary>
+    /// <param name="key">The consigne.</param>
+    /// <param name="name">The field's name.</param>
+    /// <returns>The text sent; empty when none was.</returns>
+    public string ResultOf(ConsigneKey key, string name)
+    {
+        return _state.ResultOf(key, name);
+    }
+
+    /// <summary>Hands the session a result the user pasted, then keeps it in the field.</summary>
+    /// <param name="key">The consigne.</param>
+    /// <param name="name">The field's name.</param>
+    /// <param name="text">What the user pasted.</param>
+    /// <returns>Null when sent, else why the session could not get it.</returns>
+    public string? SendResult(ConsigneKey key, string name, string text)
+    {
+        try
+        {
+            _source.SendResult(key, new PastedResult(name, text, DateTimeOffset.Now));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return exception.Message;
+        }
+        _state.SetResult(key, name, text);
+        Save();
+        return null;
+    }
+
     /// <summary>Records that the user opened a consigne.</summary>
     /// <param name="consigne">The consigne.</param>
     public void Open(Consigne consigne)

@@ -33,6 +33,33 @@ public sealed class JsonPreferencesStoreTests
         Assert.Equal(new ViewPreferences(null, 10), store.Load());
     }
 
+    /// <summary>The delay before a tab sleeps loads back with the other preferences.</summary>
+    [Fact]
+    public void Loads_back_the_delay_before_a_tab_sleeps()
+    {
+        using TempFolder folder = new();
+        JsonPreferencesStore store = new(folder.File("preferences.json"));
+        store.Save(new ViewPreferences(null, null, 4));
+
+        ViewPreferences loaded = store.Load();
+
+        Assert.Equal(new ViewPreferences(null, null, 4), loaded);
+    }
+
+    /// <summary>A file saved before the delay existed loads with no delay.</summary>
+    [Fact]
+    public void Loads_no_delay_from_a_file_written_before_it_existed()
+    {
+        using TempFolder folder = new();
+        string path = folder.File("preferences.json");
+        File.WriteAllText(path, "{\n  \"fontSize\": 14,\n  \"wheelLines\": 5\n}");
+        JsonPreferencesStore store = new(path);
+
+        ViewPreferences loaded = store.Load();
+
+        Assert.Equal(new ViewPreferences(14, 5, null), loaded);
+    }
+
     /// <summary>No file means no preference.</summary>
     [Fact]
     public void Loads_nothing_when_no_file_exists()

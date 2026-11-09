@@ -37,6 +37,9 @@ internal sealed class ConPtyConnection : ITerminalConnection, IDisposable
     /// <summary>Raised when the process could not be started, with the reason.</summary>
     public event Action<string>? StartFailed;
 
+    /// <summary>Raised on the calling thread each time input is written to the process.</summary>
+    public event Action? InputWritten;
+
     /// <inheritdoc />
     public void Start()
     {
@@ -62,6 +65,7 @@ internal sealed class ConPtyConnection : ITerminalConnection, IDisposable
     public void WriteInput(string data)
     {
         _process?.Write(data);
+        InputWritten?.Invoke();
     }
 
     /// <inheritdoc />

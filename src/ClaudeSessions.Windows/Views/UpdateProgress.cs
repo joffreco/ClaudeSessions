@@ -9,6 +9,7 @@ internal sealed class UpdateProgress : Window
     private UpdateProgress(string message)
     {
         Title = "Mise à jour";
+        AppTheme.DressDialog(this);
         Width = 460;
         SizeToContent = SizeToContent.Height;
         ResizeMode = ResizeMode.NoResize;

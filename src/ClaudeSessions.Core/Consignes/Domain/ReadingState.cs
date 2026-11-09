@@ -8,20 +8,49 @@ public sealed class ReadingState
 {
     private readonly Dictionary<string, DateTimeOffset> _seen;
     private readonly Dictionary<string, HashSet<int>> _ticked;
+    private readonly Dictionary<string, Dictionary<string, string>> _results;
 
     /// <summary>Creates an empty state.</summary>
     public ReadingState()
-        : this(new Dictionary<string, DateTimeOffset>(), new Dictionary<string, HashSet<int>>())
+        : this(new Dictionary<string, DateTimeOffset>(), new Dictionary<string, HashSet<int>>(), new Dictionary<string, Dictionary<string, string>>())
     {
     }
 
     /// <summary>Creates a state from saved values.</summary>
     /// <param name="seen">The update time seen for each consigne, by <see cref="ConsigneKey.Text"/>.</param>
     /// <param name="ticked">The ticked task indexes of each consigne, by <see cref="ConsigneKey.Text"/>.</param>
-    public ReadingState(Dictionary<string, DateTimeOffset> seen, Dictionary<string, HashSet<int>> ticked)
+    /// <param name="results">The results sent from each consigne's fields, by <see cref="ConsigneKey.Text"/>, then by field name.</param>
+    public ReadingState(Dictionary<string, DateTimeOffset> seen, Dictionary<string, HashSet<int>> ticked, Dictionary<string, Dictionary<string, string>> results)
     {
         _seen = seen;
         _ticked = ticked;
+        _results = results;
+    }
+
+    /// <summary>Gets the results sent from each consigne's fields, by field name.</summary>
+    public IReadOnlyDictionary<string, Dictionary<string, string>> Results => _results;
+
+    /// <summary>The result last sent from a consigne's field.</summary>
+    /// <param name="key">The consigne.</param>
+    /// <param name="name">The field's name.</param>
+    /// <returns>The text sent; empty when none was.</returns>
+    public string ResultOf(ConsigneKey key, string name)
+    {
+        return _results.TryGetValue(key.Text, out Dictionary<string, string>? fields) && fields.TryGetValue(name, out string? text) ? text : "";
+    }
+
+    /// <summary>Records the result sent from a consigne's field.</summary>
+    /// <param name="key">The consigne.</param>
+    /// <param name="name">The field's name.</param>
+    /// <param name="text">The text sent.</param>
+    public void SetResult(ConsigneKey key, string name, string text)
+    {
+        if (!_results.TryGetValue(key.Text, out Dictionary<string, string>? fields))
+        {
+            fields = new Dictionary<string, string>(StringComparer.Ordinal);
+            _results[key.Text] = fields;
+        }
+        fields[name] = text;
     }
 
     /// <summary>Gets the update time seen for each consigne.</summary>
@@ -90,21 +119,20 @@ public sealed class ReadingState
     /// <returns>True when something was forgotten.</returns>
     public bool Retain(IReadOnlySet<string> existing)
     {
-        int before = _seen.Count + _ticked.Count;
-        foreach (string key in new List<string>(_seen.Keys))
+        return (RemoveAbsent(_seen, existing) | RemoveAbsent(_ticked, existing) | RemoveAbsent(_results, existing)) > 0;
+    }
+
+    private static int RemoveAbsent<TValue>(Dictionary<string, TValue> byKey, IReadOnlySet<string> existing)
+    {
+        int removed = 0;
+        foreach (string key in new List<string>(byKey.Keys))
         {
             if (!existing.Contains(key))
             {
-                _seen.Remove(key);
+                byKey.Remove(key);
+                removed++;
             }
         }
-        foreach (string key in new List<string>(_ticked.Keys))
-        {
-            if (!existing.Contains(key))
-            {
-                _ticked.Remove(key);
-            }
-        }
-        return _seen.Count + _ticked.Count != before;
+        return removed;
     }
 }

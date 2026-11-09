@@ -13,7 +13,8 @@ namespace ClaudeSessions.Adapters.Consignes.Markdown;
 /// Reads a consigne's Markdown with Markdig into the blocks the window draws. Only what a session writes is
 /// kept apart: headings, paragraphs, lists and tasks, code, quotations, rules; anything else (a table, raw
 /// HTML) is shown as its source text in a code block, so nothing is lost. The <c>&lt;!-- callback --&gt;</c>
-/// mark is never shown: on a task, it asks that ticking the task wakes the session.
+/// mark is never shown: on a task, it asks that ticking the task wakes the session. A
+/// <c>&lt;!-- result: &lt;name&gt; --&gt;</c> line becomes a field where the user pastes a result for the session.
 /// </summary>
 public sealed partial class MarkdownReader
 {
@@ -21,6 +22,7 @@ public sealed partial class MarkdownReader
 
     private readonly string _source;
     private int _tasks;
+    private int _results;
 
     private MarkdownReader(string source)
     {
@@ -61,6 +63,7 @@ public sealed partial class MarkdownReader
             Md.QuoteBlock quote => new QuoteBlock(BlocksOf(quote)),
             Md.ListBlock list => ListOf(list),
             Md.ThematicBreakBlock => new RuleBlock(),
+            Md.HtmlBlock html when ResultMark().Match(html.Lines.ToString().Trim()) is { Success: true } mark => ResultFieldOf(mark),
             Md.LinkReferenceDefinitionGroup => null,
             Md.BlankLineBlock => null,
             _ => new CodeBlock("", SourceOf(block)),
@@ -102,8 +105,18 @@ public sealed partial class MarkdownReader
         return CallbackMark().IsMatch(html.Tag);
     }
 
+    private ResultFieldBlock ResultFieldOf(Match mark)
+    {
+        _results++;
+        Group name = mark.Groups["name"];
+        return new ResultFieldBlock(name.Success ? name.Value : "resultat-" + _results.ToString(CultureInfo.InvariantCulture));
+    }
+
     [GeneratedRegex(@"^<!--\s*callback\s*-->$")]
     private static partial Regex CallbackMark();
+
+    [GeneratedRegex(@"^<!--\s*result(?:\s*:\s*(?<name>[a-z0-9][a-z0-9-]{0,63}))?\s*-->$")]
+    private static partial Regex ResultMark();
 
     private static List<MarkdownInline> InlinesOf(MdInlines.ContainerInline? container)
     {

@@ -102,6 +102,23 @@ public sealed class FolderConsigneSourceTests
         Assert.Single(source.ReadAll());
     }
 
+    /// <summary>A sent result adds one JSON line, of kind result, after the ticks, with its text whole.</summary>
+    [Fact]
+    public void SendResultAddsAResultLine()
+    {
+        using TempFolder root = new();
+        root.Write("tab-a/one.md", ConsigneFiles.Of("un"));
+        FolderConsigneSource source = new(root.Path);
+        DateTimeOffset at = new(2026, 11, 4, 11, 0, 0, TimeSpan.FromHours(-5));
+
+        source.SendTick(new ConsigneKey("tab-a", "one"), new StepTick(0, "Lancer", at));
+        source.SendResult(new ConsigneKey("tab-a", "one"), new PastedResult("comptes", "id | n\n1 | 42", at));
+
+        string[] lines = File.ReadAllText(Path.Combine(root.Path, "tab-a", "one.events.jsonl")).Split('\n');
+        using JsonDocument result = JsonDocument.Parse(lines[1]);
+        Assert.Equal(("result", "comptes", "id | n\n1 | 42"), (result.RootElement.GetProperty("kind").GetString(), result.RootElement.GetProperty("name").GetString(), result.RootElement.GetProperty("text").GetString()));
+    }
+
     /// <summary>A folder outside a tab maps to its path under _sans-onglet.</summary>
     [Fact]
     public void PathOfOutsideTabFolder()

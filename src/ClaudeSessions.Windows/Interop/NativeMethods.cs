@@ -13,6 +13,9 @@ internal static partial class NativeMethods
     /// <summary>Process creation flag: the environment block is Unicode.</summary>
     internal const uint CreateUnicodeEnvironment = 0x00000400;
 
+    /// <summary>STARTUPINFO flag: the HStd* fields are the child's standard handles, so null ones leave the pseudo-console's in place instead of the parent's.</summary>
+    internal const int StartUseStdHandles = 0x00000100;
+
     /// <summary>Attribute that attaches a pseudo-console to a new process.</summary>
     internal static readonly IntPtr ProcThreadAttributePseudoConsole = 0x00020016;
 
@@ -72,6 +75,18 @@ internal static partial class NativeMethods
 
     /// <summary>MonitorFromWindow flag: the nearest monitor when the window lies on none.</summary>
     internal const uint MonitorDefaultToNearest = 0x00000002;
+
+    /// <summary>ShowWindow command: hide the window.</summary>
+    internal const uint SwHide = 0;
+
+    /// <summary>ShowWindow command: the window is minimized.</summary>
+    internal const uint SwShowMinimized = 2;
+
+    /// <summary>ShowWindow command: the window is maximized.</summary>
+    internal const uint SwShowMaximized = 3;
+
+    /// <summary>WINDOWPLACEMENT flag: a minimized window comes back maximized.</summary>
+    internal const uint WpfRestoreToMaximized = 0x0002;
 
     /// <summary>Win32 WINDOWPOS.</summary>
     [StructLayout(LayoutKind.Sequential)]
@@ -162,6 +177,29 @@ internal static partial class NativeMethods
 
         /// <summary>Largest size the user can give the window.</summary>
         public ScreenPoint PtMaxTrackSize;
+    }
+
+    /// <summary>Win32 WINDOWPLACEMENT: the state of a window and its bounds when restored, in workspace pixels.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct WindowPlacement
+    {
+        /// <summary>Size of the structure.</summary>
+        public int Length;
+
+        /// <summary>Placement flags.</summary>
+        public uint Flags;
+
+        /// <summary>ShowWindow command of the current state.</summary>
+        public uint ShowCmd;
+
+        /// <summary>Top-left corner when minimized.</summary>
+        public ScreenPoint PtMinPosition;
+
+        /// <summary>Top-left corner when maximized.</summary>
+        public ScreenPoint PtMaxPosition;
+
+        /// <summary>Bounds when neither minimized nor maximized.</summary>
+        public ScreenRect RcNormalPosition;
     }
 
     /// <summary>Character cell size of a console.</summary>
@@ -472,4 +510,32 @@ internal static partial class NativeMethods
     /// <returns>The number of characters; 0 for none, negative for a dead key.</returns>
     [LibraryImport("user32.dll", StringMarshalling = StringMarshalling.Utf16)]
     internal static partial int ToUnicodeEx(uint virtualKey, uint scanCode, [In] byte[] state, [Out] char[] buffer, int bufferSize, uint flags, IntPtr layout);
+
+    /// <summary>Reads the state of a window and its restored bounds, in workspace pixels.</summary>
+    /// <param name="window">The window.</param>
+    /// <param name="placement">Receives the placement; its length member must be set.</param>
+    /// <returns>True on success.</returns>
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool GetWindowPlacement(IntPtr window, ref WindowPlacement placement);
+
+    /// <summary>Sets the state of a window and its restored bounds, in workspace pixels.</summary>
+    /// <param name="window">The window.</param>
+    /// <param name="placement">The placement; its length member must be set.</param>
+    /// <returns>True on success.</returns>
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool SetWindowPlacement(IntPtr window, ref WindowPlacement placement);
+
+    /// <summary>Window attribute: the title bar and frame drawn by Windows use the dark mode.</summary>
+    internal const int DwmUseImmersiveDarkMode = 20;
+
+    /// <summary>Sets an attribute of the frame Windows draws around a window.</summary>
+    /// <param name="window">The window.</param>
+    /// <param name="attribute">The attribute, such as <see cref="DwmUseImmersiveDarkMode"/>.</param>
+    /// <param name="value">The value.</param>
+    /// <param name="size">Size of the value in bytes.</param>
+    /// <returns>Zero on success, an HRESULT otherwise.</returns>
+    [LibraryImport("dwmapi.dll")]
+    internal static partial int DwmSetWindowAttribute(IntPtr window, int attribute, ref int value, int size);
 }

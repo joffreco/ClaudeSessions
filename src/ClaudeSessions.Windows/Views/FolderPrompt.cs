@@ -13,6 +13,7 @@ internal sealed class FolderPrompt : Window
     private FolderPrompt(IEnumerable<string> choices, string initial)
     {
         Title = "Nouvel onglet dans…";
+        AppTheme.DressDialog(this);
         Width = 560;
         SizeToContent = SizeToContent.Height;
         ResizeMode = ResizeMode.NoResize;

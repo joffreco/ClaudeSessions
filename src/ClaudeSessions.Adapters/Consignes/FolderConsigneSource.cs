@@ -86,9 +86,19 @@ public sealed class FolderConsigneSource : IConsigneSource
     /// <inheritdoc/>
     public void SendTick(ConsigneKey key, StepTick tick)
     {
-        string line = JsonSerializer.Serialize(new StepTickLine(tick.Index, tick.Text, tick.At), LineOptions) + "\n";
+        AddEvent(key, JsonSerializer.Serialize(new StepTickLine(tick.Index, tick.Text, tick.At), LineOptions));
+    }
+
+    /// <inheritdoc/>
+    public void SendResult(ConsigneKey key, PastedResult result)
+    {
+        AddEvent(key, JsonSerializer.Serialize(new ResultLine(ResultLine.ResultKind, result.Name, result.Text, result.At), LineOptions));
+    }
+
+    private void AddEvent(ConsigneKey key, string json)
+    {
         using FileStream stream = new(Path.Combine(PathOf(key.Folder), key.Id + EventsSuffix), FileMode.Append, FileAccess.Write, FileShare.Read);
-        stream.Write(Utf8.GetBytes(line));
+        stream.Write(Utf8.GetBytes(json + "\n"));
     }
 
     /// <inheritdoc/>

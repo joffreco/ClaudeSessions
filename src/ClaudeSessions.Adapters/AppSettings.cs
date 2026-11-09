@@ -15,6 +15,9 @@ public sealed record AppSettings
     /// <summary>WSL path of the claude-sessions-tab launcher.</summary>
     public string LauncherPath { get; init; } = "/home/joff/.local/bin/claude-sessions-tab";
 
+    /// <summary>WSL path of the claude-sessions-activity probe, read before a tab is put to sleep.</summary>
+    public string ActivityProbePath { get; init; } = "/home/joff/.local/bin/claude-sessions-activity";
+
     /// <summary>WSL directory of the first tab of a new window.</summary>
     public string DefaultCwd { get; init; } = "/home/joff/Sources";
 

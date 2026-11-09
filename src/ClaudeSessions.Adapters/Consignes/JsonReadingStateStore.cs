@@ -33,7 +33,8 @@ public sealed class JsonReadingStateStore : IReadingStateStore
                 ? new ReadingState()
                 : new ReadingState(
                     new Dictionary<string, DateTimeOffset>(document.Seen ?? [], StringComparer.Ordinal),
-                    (document.Ticked ?? []).ToDictionary(pair => pair.Key, pair => pair.Value.ToHashSet(), StringComparer.Ordinal));
+                    (document.Ticked ?? []).ToDictionary(pair => pair.Key, pair => pair.Value.ToHashSet(), StringComparer.Ordinal),
+                    (document.Results ?? []).ToDictionary(pair => pair.Key, pair => new Dictionary<string, string>(pair.Value, StringComparer.Ordinal), StringComparer.Ordinal));
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
         {
@@ -48,6 +49,7 @@ public sealed class JsonReadingStateStore : IReadingStateStore
         {
             Seen = new Dictionary<string, DateTimeOffset>(state.Seen),
             Ticked = state.Ticked.ToDictionary(pair => pair.Key, pair => pair.Value.Order().ToList()),
+            Results = state.Results.ToDictionary(pair => pair.Key, pair => new Dictionary<string, string>(pair.Value)),
         };
         string directory = Path.GetDirectoryName(Path.GetFullPath(_path))!;
         Directory.CreateDirectory(directory);

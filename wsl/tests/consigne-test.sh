@@ -147,6 +147,11 @@ check "wait : un timeout non numérique est refusé (code 2)" "$?" "2"
 check "une commande inconnue est refusée (code 2)" "$?" "2"
 check "list d'un onglet sans consigne : sortie vide" "$(in_tab "00000000-0000-0000-0000-000000000001" list | wc -l | tr -d ' ')" "0"
 
+out=$(cd "$work/projet" && printf '%s\n' '- [ ] un <!-- callback -->' '' '<!-- result: comptes -->' '  <!-- result -->' '```' '<!-- result: code -->' '```' | "$script" put --title t --id resultat)
+check "put : un champ de résultat compte comme un rappel, hors code" "$(printf '%s' "$out" | sed -n 's/^callbacks: //p')" "3"
+printf '%s\n' '{"kind":"result","name":"comptes","text":"id | n\n1 | 42","at":"x"}' >> "$dir/resultat.events.jsonl"
+check "wait : rend le résultat collé, sur plusieurs lignes" "$("$script" wait "$dir/resultat.md" --timeout 5)" "$(printf 'Résultat « comptes » collé :\nid | n\n1 | 42')"
+
 check "aucun fichier temporaire laissé" "$(find "$CONSIGNES_ROOT" -name '.tmp.*' | wc -l)" "0"
 
 [ "$failures" -eq 0 ] || { printf '%s échec(s)\n' "$failures"; exit 1; }

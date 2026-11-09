@@ -66,6 +66,32 @@ public sealed class MarkdownReaderTests
         Assert.Contains(new MarkdownInline("<!-- note -->", InlineStyle.Code), first.Inlines);
     }
 
+    /// <summary>A named result mark on its own line becomes a field with that name.</summary>
+    [Fact]
+    public void NamedResultMarkBecomesAField()
+    {
+        MarkdownDocument document = MarkdownReader.Read("<!-- result: comptes -->\n");
+
+        Assert.Equal(new ResultFieldBlock("comptes"), Assert.Single(document.Blocks));
+    }
+
+    /// <summary>An unnamed result mark inside a step becomes a field numbered by its place among the result marks.</summary>
+    [Fact]
+    public void UnnamedResultMarkInsideAStepIsNumbered()
+    {
+        MarkdownDocument document = MarkdownReader.Read("<!-- result: comptes -->\n\n- [ ] Lancer la requête\n\n  <!-- result -->\n");
+
+        ListItemBlock step = Assert.Single(Assert.IsType<ListBlock>(document.Blocks[1]).Items);
+        Assert.Equal(new ResultFieldBlock("resultat-2"), step.Blocks[1]);
+    }
+
+    /// <summary>Another HTML comment on its own line stays visible as its source.</summary>
+    [Fact]
+    public void OtherHtmlBlockStaysSource()
+    {
+        Assert.Equal(new CodeBlock("", "<!-- note -->"), Assert.Single(MarkdownReader.Read("<!-- note -->").Blocks));
+    }
+
     /// <summary>A numbered list keeps its first number.</summary>
     [Fact]
     public void OrderedListKeepsStart()

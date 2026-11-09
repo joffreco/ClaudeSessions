@@ -15,7 +15,7 @@ A second executable, `Consignes.exe`, ships in the same folder: it shows the ste
 | Action | Behavior |
 |--------|----------|
 | First start | Opens one window with one tab in the default directory. |
-| Start | Reopens the windows that were open, at their place; a tab starts its session the first time it is shown. |
+| Start | Reopens the windows that were open, at their place (saved in device pixels, so a window comes back exactly where it was on each monitor, whatever its scaling); a tab starts its session the first time it is shown. |
 | Close a window, others open | Ends its sessions and lists it under **Fenêtres fermées** in the menu, from where it reopens with its tabs or is forgotten. |
 | Close the last window | Quits; that window comes back at the next start. |
 | **Quitter** (menu) | Saves and quits; every open window comes back at the next start. |
@@ -26,6 +26,7 @@ A second executable, `Consignes.exe`, ships in the same folder: it shows the ste
 | `/exit` in a tab | Closes the tab and keeps it among the 10 last closed tabs. |
 | Session fails (exit code other than 0) | Keeps the tab with a banner: **Reprendre**, **Nouvelle session ici**, **Fermer**. |
 | `/clear`, `/resume`, fork in a tab | Followed: the tab resumes the new session next time. |
+| Tab idle for the chosen delay (**☰ → Veille des onglets inactifs**) | The tab sleeps: its session is stopped to free its memory, and the tab shows « Session en veille » with a **Réveiller** button. Showing the tab, or **Réveiller**, resumes the session. See [Idle tabs sleep](#idle-tabs-sleep). |
 | A session finishes working while you do not watch it | Its tab turns green until you show it; when its window is not active, the window's taskbar button also gets a green dot until you click any window of the app. |
 | A session asks for an approval while you do not watch it | Its tab turns orange until you show it; when its window is not active, the taskbar button gets an orange dot at once, until you click any window of the app. |
 
@@ -34,6 +35,16 @@ A tab resumes its session when a transcript of it exists (`~/.claude/projects/*/
 A session finishes working when its spinner gives way to the ✳. If that happens in a hidden tab, or in the shown tab of a window that is not active, the tab gets a green background until you show it in an active window; the window's taskbar button also gets a green dot when the window is not active and the session stayed idle for 1.5 seconds. A click anywhere in the app, even in a window already active, or the activation of one of its windows removes the dot of every window at once; so does the end of the wait of all its tabs. The green tabs stay green until you show them. Windows does not draw the dot when the taskbar uses small icons. A session that starts idle, as a resumed one does, has finished nothing and is not signalled. Orange takes precedence over green, on the tab and on the dot, and only showing the tab ends it, since only you can answer.
 
 The app learns about `/clear`, `/resume` and forks from the `SessionStart` hook `wsl/claude-sessions-hook.sh`, which records the session of each tab in `%LOCALAPPDATA%\ClaudeSessions\session-tabs\<tab_id>.json`. The app gives the hook this folder through the `CLAUDE_SESSIONS_RECORDS` variable and `WSLENV`, watches it, and follows a change as soon as it happens, then saves; a `/clear` done just before a shutdown is therefore kept. It also reads the records every 30 seconds and when a window closes or the app quits, in case a notification was missed; when a read fails, the tab keeps its last known session. The same hook, on `PermissionRequest`, creates `<tab_id>.approval` in that folder, which the app reads and deletes; it decides nothing, so Claude Code asks you as usual.
+
+### Idle tabs sleep
+
+**☰ → Veille des onglets inactifs** chooses a delay: 1, 2, 4, 8 or 24 hours, or **Jamais** (the default). The choice applies to every window and is kept as `suspendAfterHours` in `preferences.json`. Every 30 seconds, the app puts a tab to sleep when all of these hold:
+
+- its session waits for you (✳ in the title);
+- the tab is not shown in an active window, and you have neither looked at it nor typed in it for the delay;
+- the session wrote no transcript in the delay, subagents and workflows included, and its own `claude` has no child process (background command, monitor, running tool), as read in WSL by `wsl/claude-sessions-activity`.
+
+A tab whose probe fails is left awake. A sleeping tab keeps its place and its session id; waking it resumes the session.
 
 ## Keyboard Shortcuts
 
@@ -54,6 +65,8 @@ The app learns about `/clear`, `/resume` and forks from the `SessionStart` hook 
 
 Every other key goes to the session.
 
+The app follows the Windows app mode (light or dark) live: the tab strip and window chrome repaint at once, and the **☰** menu and the dialogs take the matching Fluent theme when they open. The terminals stay dark in both modes.
+
 ## Consignes
 
 `Consignes.exe` lists the procedures that Claude Code sessions deposit for you. A session writes a procedure as a Markdown file with the `consigne` command in WSL; the app lists it under the ClaudeSessions tab of that session, renders it with a **Copier** button on each code block and boxes to tick, and counts the unread ones in its title. A consigne you are done with is archived. The app reads `~/.claude/consignes` through `\\wsl.localhost\<distro>` and the ClaudeSessions `workspace.json` to name and place each session's consignes. Nothing is written back to the consignes except by the archive and by tick events (see Callback on a ticked step).
@@ -69,6 +82,7 @@ Every other key goes to the session.
 | Code block | Rendered with a **Copier** button that puts the block on the clipboard. |
 | Task (`- [ ] …`) | Rendered as a box; ticks are kept per consigne in `consignes-state.json`. A box already `[x]` in the file shows ticked. |
 | Task marked `<!-- callback -->` | Shows a 🔔; ticking it tells the session (see below). |
+| `<!-- result: <name> -->` on its own line | A box to paste a result in, such as the rows of a SQL query, and a « Envoyer à la session » button (see below). The text sent stays in the box. |
 | **Archiver** | Moves the consigne to the `archive/` folder of its session, with its event files. |
 | **☰ → Ouvrir le dossier des consignes** | Opens `~/.claude/consignes` in Explorer. |
 | **☰ → Quitter** | Quits. |
@@ -88,13 +102,13 @@ consigne done <id>
 consigne wait <id|file.md> [--timeout <seconds>]
 ```
 
-- `put` reads the Markdown on stdin and writes `<id>.md` atomically. Without `--id`, the id is a slug of the title followed by the time. An id matches `[a-z0-9][a-z0-9-]{0,63}`. The status defaults to `prete`. Depositing again with the same id keeps `created` and updates `updated`. It prints `id:`, `fichier:` and `callbacks:` (the number of marked tasks). A missing title, a bad id or status, or an empty body fails with code 2.
+- `put` reads the Markdown on stdin and writes `<id>.md` atomically. Without `--id`, the id is a slug of the title followed by the time. An id matches `[a-z0-9][a-z0-9-]{0,63}`. The status defaults to `prete`. Depositing again with the same id keeps `created` and updates `updated`. It prints `id:`, `fichier:` and `callbacks:` (the number of marked tasks and result fields). A missing title, a bad id or status, or an empty body fails with code 2.
 - `list` prints the id, status and title of the consignes of the current session.
 - `done` archives a consigne with its event files.
 - `wait` blocks until a marked step is ticked (see below).
 - The tab of a session is known from `CLAUDE_SESSIONS_TAB` and `CLAUDE_SESSIONS_TAB_PID`, set by ClaudeSessions; a nested or background `claude` does not own the tab and files its consignes by folder.
 
-The skill `skill/consignes/SKILL.md`, linked by `wsl/setup.sh`, tells sessions to deposit every procedure they hand you, in addition to showing it in the answer.
+The skill `skill/consignes/SKILL.md`, linked by `wsl/setup.sh`, tells sessions to deposit every procedure they hand you, in addition to showing it in the answer, and to put a `<!-- result: <name> -->` field where they need output pasted back. The skill `skill/breakpoint-consignes/` builds on it: it prepares and drives a hand-test suite at a breakpoint, one consigne per gesture, with helper scripts for the debugger, SQL Server and Extended Events.
 
 ### Callback on a ticked step
 
@@ -108,13 +122,17 @@ The app appends a line `{"index":…,"text":…,"at":…}` to `<id>.events.jsonl
 
 | Exit code | Meaning |
 |-----------|---------|
-| 0 | One or more marked steps were ticked. |
+| 0 | One or more marked steps were ticked, or results sent. |
 | 1 | No consigne at that path or id when `wait` starts. |
 | 2 | Bad usage, id or file. |
 | 3 | The consigne was archived. |
 | 4 | No tick within the timeout (3600 s by default). |
 
 Ticks made while no `wait` runs are not lost: the next `wait` gives them at once, tracked in `<id>.events.seen`.
+
+### Pasted results
+
+A line `<!-- result: <name> -->` (name `a-z0-9-`; without a name the field is `resultat-<n>`) becomes a field where you paste what the session asked for, then click **Envoyer à la session**. The app appends `{"kind":"result","name":…,"text":…,"at":…}` to the same `<id>.events.jsonl`, and `wait` prints `Résultat « <name> » collé :` followed by the text. Sending again sends the new text. A field counts in `callbacks:`, so the session's `wait` is already running.
 
 ## Prerequisites
 
@@ -131,13 +149,15 @@ src/ClaudeSessions.Core/Consignes/               consignes domain and applicatio
 src/ClaudeSessions.Adapters/Consignes/           consigne files, Markdown, reading state
 wsl/claude-sessions-tab                          launcher run in WSL for each tab
 wsl/consigne                                     the command a session runs to deposit a consigne
+wsl/claude-sessions-activity                     probe run through wsl.exe before a tab is put to sleep
 wsl/tests/consigne-test.sh                       tests of wsl/consigne
 skill/consignes/SKILL.md                         Claude skill that tells sessions to deposit
+skill/breakpoint-consignes/                      Claude skill that drives a hand-test suite at a breakpoint
 icon/make_consignes_icon.py                      draws the Consignes icon
 %LOCALAPPDATA%\Programs\ClaudeSessions\          installed apps (ClaudeSessions.exe and Consignes.exe)
-%LOCALAPPDATA%\ClaudeSessions\workspace.json     windows, tabs and closed tabs
+%LOCALAPPDATA%\ClaudeSessions\workspace.json     windows, tabs and closed tabs; window bounds carry a `unit` (`DevicePixels`; absent means the older device-independent pixels)
 %LOCALAPPDATA%\ClaudeSessions\settings.json      settings
-%LOCALAPPDATA%\ClaudeSessions\preferences.json   zoom and lines per wheel notch, absent when neither is set
+%LOCALAPPDATA%\ClaudeSessions\preferences.json   zoom, lines per wheel notch and sleep delay, absent when none is set
 %LOCALAPPDATA%\ClaudeSessions\session-tabs\      session of each tab and approval signals, written by the hook
 %LOCALAPPDATA%\ClaudeSessions\consignes-state.json   what was read and ticked in Consignes
 ~/.claude/consignes/<key>/<id>.md                a consigne
@@ -183,7 +203,7 @@ dotnet format ClaudeSessions.slnx --verify-no-changes
    ./wsl/setup.sh
    ```
 
-   It links the launcher and the `consigne` command into `~/.local/bin`, the hook into `~/.claude/hooks` and the skill into `~/.claude/skills/consignes`, creates `~/.claude/consignes`, and registers the hook for `SessionStart` and `PermissionRequest` in `~/.claude/settings.json`, keeping the previous file as `settings.json.bak`. Running it again changes nothing.
+   It links the launcher, the activity probe and the `consigne` command into `~/.local/bin`, the hook into `~/.claude/hooks` and every skill of `skill/` into `~/.claude/skills`, creates `~/.claude/consignes`, and registers the hook for `SessionStart` and `PermissionRequest` in `~/.claude/settings.json`, keeping the previous file as `settings.json.bak`. Running it again changes nothing.
 
 2. From Windows PowerShell, run the installer:
 
@@ -219,6 +239,7 @@ If another tool also reopens Claude sessions at logon (such as `claude-restore` 
 | `defaultCwd` | `/home/joff/Sources` | Directory of the first tab of a new window |
 | `fontFamily` | `Cascadia Mono` | Terminal font |
 | `fontSize` | `11` | Terminal font size, in points; the zoom starts from it and `Ctrl+0` comes back to it |
+| `activityProbePath` | `/home/joff/.local/bin/claude-sessions-activity` | WSL path of the activity probe read before a tab is put to sleep |
 | `consignesPollSeconds` | `2` | Seconds between two reads of the consignes by Consignes (at least 1) |
 
 Restart the app, and Consignes, after editing it.
@@ -231,7 +252,7 @@ Environment variables of `consigne`:
 | `CLAUDE_SESSION_TABS` | `~/.claude/session-tabs` | Records of each tab, for the `session_id` |
 | `CONSIGNES_WORKSPACE` | `workspace.json`, found through `%LOCALAPPDATA%` | Source of the tab title |
 
-The **☰** menu sets **Lignes par cran de molette**: 1, 3, 5 or 10 lines per wheel notch in every window, or the Windows setting. The choice is kept, with the zoom, in `preferences.json`; it sets how far the wheel scrolls the terminal history. As in Windows Terminal, the wheel scrolls the window under the mouse, even an inactive one, without a click first.
+The **☰** menu sets **Lignes par cran de molette**: 1, 3, 5 or 10 lines per wheel notch in every window, or the Windows setting. The choice is kept, with the zoom, in `preferences.json`; it sets how far the wheel scrolls the terminal history. **Veille des onglets inactifs** is kept there too, as `suspendAfterHours`. As in Windows Terminal, the wheel scrolls the window under the mouse, even an inactive one, without a click first.
 
 ## Confirm It Works
 

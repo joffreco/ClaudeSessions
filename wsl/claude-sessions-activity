@@ -1,0 +1,37 @@
+#!/bin/bash
+# Report what the session of one claude-sessions tab did lately, for the app's idle suspension (run by
+# the Windows app through wsl.exe). Prints two lines:
+#   transcript=<epoch seconds of the newest write to the session's transcript or to anything under its
+#              folder, subagents and workflows included; empty when there is none>
+#   children=<live child processes of the tab's own claude (background commands, monitors, running
+#            tools); 0 when it does not run>
+# The tab's own claude is the one whose environment holds CLAUDE_SESSIONS_TAB=<tab> and its own PID in
+# CLAUDE_SESSIONS_TAB_PID, as claude-sessions-tab sets them.
+# Usage: claude-sessions-activity <tab_uuid> <session_uuid>
+uuid='^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+
+if [ "$#" -ne 2 ] || [[ ! "$1" =~ $uuid ]] || [[ ! "$2" =~ $uuid ]]; then
+  echo "usage: claude-sessions-activity <tab_uuid> <session_uuid>" >&2
+  exit 2
+fi
+tab="$1"
+session="$2"
+
+shopt -s nullglob
+paths=("$HOME"/.claude/projects/*/"$session".jsonl "$HOME"/.claude/projects/*/"$session")
+newest=""
+if [ "${#paths[@]}" -gt 0 ]; then
+  newest=$(find "${paths[@]}" -type f -printf '%T@\n' 2> /dev/null | sort -n | tail -n 1)
+fi
+
+children=0
+for pid in $(pgrep -x claude); do
+  environment=$(tr '\0' '\n' < "/proc/$pid/environ" 2> /dev/null) || continue
+  if grep -qx "CLAUDE_SESSIONS_TAB=$tab" <<< "$environment" && grep -qx "CLAUDE_SESSIONS_TAB_PID=$pid" <<< "$environment"; then
+    children=$(pgrep -c -P "$pid")
+    break
+  fi
+done
+
+echo "transcript=${newest%.*}"
+echo "children=${children:-0}"

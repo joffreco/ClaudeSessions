@@ -191,6 +191,7 @@ internal sealed class PseudoConsoleProcess : IDisposable
                     "UpdateProcThreadAttribute");
                 NativeMethods.StartupInfoEx startupInfo = new() { LpAttributeList = attributeList };
                 startupInfo.StartupInfo.Cb = Marshal.SizeOf<NativeMethods.StartupInfoEx>();
+                startupInfo.StartupInfo.DwFlags = NativeMethods.StartUseStdHandles;
                 ThrowIfFalse(
                     NativeMethods.CreateProcess(
                         null,

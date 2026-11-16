@@ -1,0 +1,24 @@
+#!/bin/bash
+# Status line wrapper for ClaudeSessions. Claude Code runs it as its statusLine command; it runs the
+# user's own status line command (kept by setup.sh in ~/.claude/session-status/command) with the same
+# JSON input, prints exactly what that command prints, and keeps a copy per session in
+# ~/.claude/session-status/<session_id>.txt for the Conversations app, next to the JSON input it received
+# (<session_id>.json), from which the app reads the session name. Without a kept command it prints
+# nothing, as Claude Code would without a status line.
+dir="$HOME/.claude/session-status"
+input=$(cat)
+command=$(cat "$dir/command" 2>/dev/null || true)
+output=""
+status=0
+if [ -n "$command" ]; then
+  output=$(printf '%s' "$input" | bash -c "$command")
+  status=$?
+fi
+printf '%s' "$output"
+session=$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null || true)
+if [[ "$session" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+  mkdir -p "$dir"
+  tmp=$(mktemp "$dir/.$session.XXXXXX") && printf '%s' "$output" > "$tmp" && mv -f "$tmp" "$dir/$session.txt"
+  tmp=$(mktemp "$dir/.$session.XXXXXX") && printf '%s' "$input" > "$tmp" && mv -f "$tmp" "$dir/$session.json"
+fi
+exit "$status"

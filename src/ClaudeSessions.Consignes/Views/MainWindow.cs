@@ -11,6 +11,7 @@ using ClaudeSessions.Adapters.Consignes.Markdown;
 using ClaudeSessions.Core.Consignes.Domain;
 using ClaudeSessions.Consignes.Hosting;
 using ClaudeSessions.Consignes.Interfaces;
+using ClaudeSessions.Ui;
 
 namespace ClaudeSessions.Consignes.Views;
 
@@ -255,7 +256,7 @@ internal sealed class MainWindow : Window, IBoardView
         MarkdownDocument document = MarkdownReader.Read(consigne.Body);
         FlowDocumentScrollViewer viewer = new()
         {
-            Document = ConsigneDocumentBuilder.Build(document, new ShownConsigneActions(_controller, consigne.Key, this)),
+            Document = MarkdownDocumentBuilder.Build(document, new ShownConsigneActions(_controller, consigne.Key, this)),
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             IsToolBarVisible = false,
         };

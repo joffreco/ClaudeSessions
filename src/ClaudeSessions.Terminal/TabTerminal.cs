@@ -6,23 +6,24 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Threading;
 using ClaudeSessions.Adapters;
-using ClaudeSessions.Windows.Views;
 using Microsoft.Terminal.Wpf;
 
-namespace ClaudeSessions.Windows.Terminal;
+namespace ClaudeSessions.Terminal;
 
 /// <summary>
 /// The terminal of one tab: a Windows Terminal control connected to the session process. Each
 /// launch gets a fresh control and a fresh process; events are raised on the UI thread. A sleeping
-/// terminal has neither: it shows a placeholder until it is launched again.
+/// terminal has neither: it shows a placeholder until it is launched again. The app that hosts it
+/// says whether the dark mode is in force and paints its background, which shows before the control loads.
 /// </summary>
-internal sealed class TabTerminal : Border
+public sealed class TabTerminal : Border
 {
     private const string BracketedPasteStart = "\u001b[200~";
     private const string BracketedPasteEnd = "\u001b[201~";
     private const string RedrawKey = "\u000c";
 
     private readonly string _fontFamily;
+    private readonly Func<bool> _isDark;
     private short _fontSize;
     private TerminalControl? _control;
     private TerminalControl? _connectedControl;
@@ -33,11 +34,14 @@ internal sealed class TabTerminal : Border
     /// <summary>Creates an empty terminal; nothing runs until <see cref="Launch"/>.</summary>
     /// <param name="fontFamily">Font of the terminal.</param>
     /// <param name="fontSize">Font size, in points.</param>
-    public TabTerminal(string fontFamily, short fontSize)
+    /// <param name="isDark">Tells whether the dark mode is in force, read at each launch and each repaint.</param>
+    /// <param name="background">Background shown around and before the control; a brush the app repaints follows the mode.</param>
+    public TabTerminal(string fontFamily, short fontSize, Func<bool> isDark, Brush background)
     {
         _fontFamily = fontFamily;
         _fontSize = fontSize;
-        Background = ChromePalette.SelectedTab;
+        _isDark = isDark;
+        Background = background;
         IsVisibleChanged += (_, _) => RedrawIfPending();
     }
 
@@ -159,6 +163,26 @@ internal sealed class TabTerminal : Border
         }
     }
 
+    /// <summary>
+    /// Types a message into the session and submits it with Enter. A message on several lines goes as a
+    /// bracketed paste, so that its line breaks stay in the message instead of submitting each line. A slash
+    /// command or a ! command on one line is typed key by key, as Claude Code only recognises them typed.
+    /// </summary>
+    /// <param name="text">The message.</param>
+    /// <returns>True when a session runs and received it.</returns>
+    public bool SubmitPrompt(string text)
+    {
+        if (!IsRunning || _connection is null)
+        {
+            return false;
+        }
+        string message = text.Replace("\r\n", "\n", StringComparison.Ordinal);
+        bool typed = !message.Contains('\n', StringComparison.Ordinal) && (message.StartsWith('/') || message.StartsWith('!'));
+        _connection.WriteInput(typed ? message : BracketedPasteStart + message + BracketedPasteEnd);
+        _connection.WriteInput("\r");
+        return true;
+    }
+
     /// <summary>Sends typed text to the session.</summary>
     /// <param name="text">The text.</param>
     /// <returns>True when a session runs and received it.</returns>
@@ -259,7 +283,7 @@ internal sealed class TabTerminal : Border
 
     private void ApplyFont(TerminalControl control, ConPtyConnection connection)
     {
-        bool dark = AppTheme.IsDark;
+        bool dark = _isDark();
         control.SetTheme(TerminalThemes.For(dark), _fontFamily, _fontSize, ColorOf(TerminalThemes.BackgroundOf(dark)));
         if (control.Rows > 0 && control.Columns > 0)
         {

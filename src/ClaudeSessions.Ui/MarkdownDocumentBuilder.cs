@@ -8,28 +8,35 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
 using ClaudeSessions.Adapters.Consignes.Markdown;
-using ClaudeSessions.Consignes.Interfaces;
 using WpfList = System.Windows.Documents.List;
 using WpfListItem = System.Windows.Documents.ListItem;
 
-namespace ClaudeSessions.Consignes.Views;
+namespace ClaudeSessions.Ui;
 
 /// <summary>
-/// Draws a consigne's blocks as a FlowDocument in the Fluent theme: each code block with a « Copier » button,
-/// each task with a box whose state the app keeps, and a bell after the box of a step whose tick wakes the session;
-/// each result field with a box to paste in and a button that sends it to the session.
+/// Draws Markdown blocks as a FlowDocument in the Fluent theme, for Consignes and Conversations: each code block
+/// with a « Copier » button, each task with a box whose state the app keeps, and a bell after the box of a step whose
+/// tick wakes the session; each result field with a box to paste in and a button that sends it to the session.
 /// </summary>
-internal sealed class ConsigneDocumentBuilder
+public sealed class MarkdownDocumentBuilder
 {
-    private const double BodySize = 14;
-    private const double CodeSize = 13;
-    private static readonly FontFamily CodeFont = new("Cascadia Mono, Consolas");
+    /// <summary>Font size of the body text.</summary>
+    public const double BodySize = 14;
+
+    /// <summary>Font size of code.</summary>
+    public const double CodeSize = 13;
+
+    /// <summary>Font of code.</summary>
+    public static readonly FontFamily CodeFont = new("Cascadia Mono, Consolas");
+
+    /// <summary>Font of the body text.</summary>
+    public static readonly FontFamily BodyFont = new("Segoe UI Variable Text, Segoe UI");
 
     private const string CallbackHint = "Cocher cette case prévient la session.";
 
-    private readonly IConsigneActions _actions;
+    private readonly IMarkdownActions _actions;
 
-    private ConsigneDocumentBuilder(IConsigneActions actions)
+    private MarkdownDocumentBuilder(IMarkdownActions actions)
     {
         _actions = actions;
     }
@@ -38,19 +45,43 @@ internal sealed class ConsigneDocumentBuilder
     /// <param name="document">The body, read.</param>
     /// <param name="actions">What ticking a task or sending a result does.</param>
     /// <returns>The document.</returns>
-    public static FlowDocument Build(MarkdownDocument document, IConsigneActions actions)
+    public static FlowDocument Build(MarkdownDocument document, IMarkdownActions actions)
     {
-        ConsigneDocumentBuilder builder = new(actions);
+        FlowDocument flow = NewDocument();
+        flow.Blocks.AddRange(BlocksOf(document, actions));
+        return flow;
+    }
+
+    /// <summary>Creates an empty document in the body font and colors, for a caller that adds its own blocks.</summary>
+    /// <returns>The document.</returns>
+    public static FlowDocument NewDocument()
+    {
         FlowDocument flow = new()
         {
-            FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI"),
+            FontFamily = BodyFont,
             FontSize = BodySize,
             PagePadding = new Thickness(24, 16, 24, 24),
             TextAlignment = TextAlignment.Left,
         };
         flow.SetResourceReference(TextElement.ForegroundProperty, "TextFillColorPrimaryBrush");
-        flow.Blocks.AddRange(builder.BlocksOf(document.Blocks));
         return flow;
+    }
+
+    /// <summary>Draws the blocks of a body, to place inside another document.</summary>
+    /// <param name="document">The body, read.</param>
+    /// <param name="actions">What ticking a task or sending a result does.</param>
+    /// <returns>The blocks.</returns>
+    public static List<Block> BlocksOf(MarkdownDocument document, IMarkdownActions actions)
+    {
+        return new MarkdownDocumentBuilder(actions).BlocksOf(document.Blocks);
+    }
+
+    /// <summary>Draws a block of code with its « Copier » button, as in a Markdown body.</summary>
+    /// <param name="text">The code.</param>
+    /// <returns>The block.</returns>
+    public static BlockUIContainer CodeOf(string text)
+    {
+        return CodeOf(new CodeBlock("", text));
     }
 
     private List<Block> BlocksOf(IEnumerable<MarkdownBlock> blocks)

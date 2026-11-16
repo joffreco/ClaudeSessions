@@ -11,8 +11,9 @@ using System.Windows.Shell;
 using System.Windows.Threading;
 using ClaudeSessions.Core.Application.Dto;
 using ClaudeSessions.Core.Domain;
+using ClaudeSessions.Core.Transcripts.Domain;
 using ClaudeSessions.Windows.Hosting;
-using ClaudeSessions.Windows.Terminal;
+using ClaudeSessions.Terminal;
 
 namespace ClaudeSessions.Windows.Views;
 
@@ -276,6 +277,23 @@ internal sealed class SessionWindowView : Window
             ShowBadgeIfStillWaiting();
         }
         RefreshChrome();
+    }
+
+    /// <summary>Types a message sent from Conversations into a tab's session and submits it.</summary>
+    /// <param name="tabId">The tab, which this window holds.</param>
+    /// <param name="text">The message.</param>
+    /// <returns>What became of it; nothing is sent while the session asks for an approval, which Enter would answer.</returns>
+    public PromptOutcome SubmitPrompt(TabId tabId, string text)
+    {
+        if (!_terminals.TryGetValue(tabId, out TabTerminal? terminal))
+        {
+            return PromptOutcome.NoSuchTab;
+        }
+        if (_attention.AsksApproval(tabId))
+        {
+            return PromptOutcome.AwaitingApproval;
+        }
+        return terminal.SubmitPrompt(text) ? PromptOutcome.Sent : PromptOutcome.NotRunning;
     }
 
     /// <summary>Redraws the tab strip and shows the selected terminal, starting its session if needed.</summary>

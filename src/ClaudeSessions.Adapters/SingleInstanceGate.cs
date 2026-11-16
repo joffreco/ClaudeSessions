@@ -18,6 +18,9 @@ public sealed class SingleInstanceGate : IDisposable
     /// <summary>The name of the Consignes application's gate.</summary>
     public const string Consignes = "Consignes";
 
+    /// <summary>The name of the Conversations application's gate.</summary>
+    public const string Conversations = "Conversations";
+
     private const int ConnectTimeoutMilliseconds = 2000;
 
     private readonly Mutex _mutex;

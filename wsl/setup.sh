@@ -3,7 +3,9 @@
 # command into ~/.local/bin,
 # link the hook into ~/.claude/hooks and every skill of skill/ into ~/.claude/skills, create
 # ~/.claude/consignes, and register the hook for SessionStart and PermissionRequest in ~/.claude/settings.json
-# (a copy of the previous file is kept as settings.json.bak). Running it again changes nothing.
+# (a copy of the previous file is kept as settings.json.bak). A status line command already set is wrapped by
+# claude-sessions-statusline, which shows the same and keeps a copy for Conversations; the original command
+# is kept in ~/.claude/session-status/command. Running it again changes nothing.
 set -euo pipefail
 
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -19,6 +21,7 @@ ln -sfn "$here/claude-sessions-tab" "$HOME/.local/bin/claude-sessions-tab"
 ln -sfn "$here/claude-sessions-activity" "$HOME/.local/bin/claude-sessions-activity"
 ln -sfn "$here/claude-sessions-hook.sh" "$HOME/.claude/hooks/claude-sessions-hook.sh"
 ln -sfn "$here/consigne" "$HOME/.local/bin/consigne"
+ln -sfn "$here/claude-sessions-statusline" "$HOME/.local/bin/claude-sessions-statusline"
 for skill in "$repo"/skill/*/; do ln -sfn "${skill%/}" "$HOME/.claude/skills/$(basename "$skill")"; done
 
 [ -f "$settings" ] || echo '{}' > "$settings"
@@ -33,6 +36,21 @@ for event in SessionStart PermissionRequest; do
     echo "hook registered for $event in $settings (previous file: $settings.bak)"
   fi
 done
+wrapper='bash "$HOME/.local/bin/claude-sessions-statusline"'
+current=$(jq -r '.statusLine.command // empty' "$settings")
+if [ "$current" = "$wrapper" ]; then
+  echo "status line already wrapped in $settings"
+elif [ -z "$current" ]; then
+  echo "no status line command in $settings: nothing to wrap, Conversations shows no status line"
+else
+  mkdir -p "$HOME/.claude/session-status"
+  printf '%s\n' "$current" > "$HOME/.claude/session-status/command"
+  cp "$settings" "$settings.bak"
+  tmp=$(mktemp "$settings.XXXXXX")
+  jq --arg w "$wrapper" '.statusLine.type = "command" | .statusLine.command = $w' "$settings" > "$tmp"
+  mv -f "$tmp" "$settings"
+  echo "status line wrapped in $settings; original command kept in $HOME/.claude/session-status/command (previous file: $settings.bak)"
+fi
 echo "launcher: $HOME/.local/bin/claude-sessions-tab -> $here/claude-sessions-tab"
 echo "activity: $HOME/.local/bin/claude-sessions-activity -> $here/claude-sessions-activity"
 echo "hook:     $HOME/.claude/hooks/claude-sessions-hook.sh -> $here/claude-sessions-hook.sh"

@@ -13,7 +13,8 @@ using ClaudeSessions.Core.Application;
 using ClaudeSessions.Core.Application.Dto;
 using ClaudeSessions.Core.Consignes.Application;
 using ClaudeSessions.Core.Domain;
-using ClaudeSessions.Windows.Terminal;
+using ClaudeSessions.Core.Transcripts.Domain;
+using ClaudeSessions.Terminal;
 using ClaudeSessions.Windows.Views;
 
 namespace ClaudeSessions.Windows.Hosting;
@@ -265,6 +266,56 @@ internal sealed class WindowCoordinator
         _ = FollowRecordAsync(tabId);
     }
 
+    /// <summary>Types a message sent from Conversations into a tab's session and submits it.</summary>
+    /// <param name="tabId">The tab.</param>
+    /// <param name="text">The message.</param>
+    /// <returns>What became of it.</returns>
+    public PromptOutcome SubmitPrompt(TabId tabId, string text)
+    {
+        SessionWindowView? view = _views.Values.FirstOrDefault(candidate => candidate.Model.FindTab(tabId) is not null);
+        if (view is null)
+        {
+            return PromptOutcome.NoSuchTab;
+        }
+        PromptOutcome outcome = view.SubmitPrompt(tabId, text);
+        if (outcome != PromptOutcome.Sent || !SlashCommands.OpensMenu(text))
+        {
+            return outcome;
+        }
+        // The menu of /rewind and the like exists only in the terminal: show the tab in front to answer it.
+        ShowTab(tabId);
+        return PromptOutcome.SentToMenu;
+    }
+
+    /// <summary>Selects a tab and brings its window to the front, asked by Conversations; a tab asleep wakes.</summary>
+    /// <param name="tabId">The tab.</param>
+    /// <returns>Done, or NoSuchWindow when no open window holds the tab.</returns>
+    public WindowOutcome ShowTab(TabId tabId)
+    {
+        SessionWindowView? view = _views.Values.FirstOrDefault(candidate => candidate.Model.FindTab(tabId) is not null);
+        if (view is null)
+        {
+            return WindowOutcome.NoSuchWindow;
+        }
+        SelectTab(view, tabId);
+        view.BringToFront();
+        return WindowOutcome.Done;
+    }
+
+    /// <summary>Opens a new tab in a window, asked by Conversations, in the directory of the window's selected tab.</summary>
+    /// <param name="windowId">The window.</param>
+    /// <returns>Done, or NoSuchWindow when no open window has this id.</returns>
+    public WindowOutcome NewTabIn(WindowId windowId)
+    {
+        if (!_views.TryGetValue(windowId, out SessionWindowView? view))
+        {
+            return WindowOutcome.NoSuchWindow;
+        }
+        SessionTab? selected = view.Model.SelectedTabId is TabId tabId ? view.Model.FindTab(tabId) : null;
+        NewTab(view, selected?.Cwd ?? _service.DefaultCwd);
+        return WindowOutcome.Done;
+    }
+
     /// <summary>Signals the approval a session asks for.</summary>
     /// <param name="tabId">The tab.</param>
     public void OnApprovalRequested(TabId tabId)
@@ -298,7 +349,7 @@ internal sealed class WindowCoordinator
     /// <returns>A terminal that runs nothing yet.</returns>
     public TabTerminal CreateTerminal()
     {
-        return new TabTerminal(_settings.FontFamily, _zoom.Size);
+        return new TabTerminal(_settings.FontFamily, _zoom.Size, () => AppTheme.IsDark, ChromePalette.SelectedTab);
     }
 
     /// <summary>Lines scrolled per wheel notch, or null when the Windows setting applies.</summary>

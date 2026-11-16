@@ -1,6 +1,6 @@
 using Microsoft.Terminal.Wpf;
 
-namespace ClaudeSessions.Windows.Terminal;
+namespace ClaudeSessions.Terminal;
 
 /// <summary>Color themes for the terminals.</summary>
 internal static class TerminalThemes

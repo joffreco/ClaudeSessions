@@ -3,3 +3,4 @@ obj/
 vendor/
 publish/
 TestResults/
+__pycache__/

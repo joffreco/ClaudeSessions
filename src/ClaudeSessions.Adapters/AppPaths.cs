@@ -21,6 +21,9 @@ public static class AppPaths
     /// <summary>The view preferences chosen from the keyboard or the menu: zoom, lines per wheel notch.</summary>
     public static string PreferencesFile => Path.Combine(DataFolder, "preferences.json");
 
+    /// <summary>The zoom of the Conversations window.</summary>
+    public static string ConversationsPreferencesFile => Path.Combine(DataFolder, "conversations.json");
+
     /// <summary>What the user read and ticked in the Consignes app.</summary>
     public static string ConsignesStateFile => Path.Combine(DataFolder, "consignes-state.json");
 

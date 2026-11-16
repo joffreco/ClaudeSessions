@@ -33,6 +33,15 @@ public sealed record AppSettings
     /// <summary>Folder where the sessions deposit their consignes, as Windows sees it.</summary>
     public string ConsignesDirectory => WindowsPathOf(WslHome.TrimEnd('/') + "/.claude/consignes");
 
+    /// <summary>Folder where Claude Code writes the session transcripts, one subfolder per project, as Windows sees it.</summary>
+    public string ProjectsDirectory => WindowsPathOf(WslHome.TrimEnd('/') + "/.claude/projects");
+
+    /// <summary>WSL folder where Conversations saves the images pasted in its field, for the sessions to read.</summary>
+    public string SessionImagesFolder => WslHome.TrimEnd('/') + "/.claude/session-images";
+
+    /// <summary>Folder where wsl/claude-sessions-statusline keeps each session's last status line, as Windows sees it.</summary>
+    public string StatusLinesDirectory => WindowsPathOf(WslHome.TrimEnd('/') + "/.claude/session-status");
+
     /// <summary>Converts a WSL path to the path Windows uses to reach it.</summary>
     /// <param name="wslPath">An absolute WSL path.</param>
     /// <returns>The \\wsl.localhost path of the same file.</returns>

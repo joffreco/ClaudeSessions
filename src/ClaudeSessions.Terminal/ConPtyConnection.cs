@@ -1,7 +1,7 @@
 using System;
 using Microsoft.Terminal.Wpf;
 
-namespace ClaudeSessions.Windows.Terminal;
+namespace ClaudeSessions.Terminal;
 
 /// <summary>
 /// Connects a Windows Terminal control to a command run in a ConPTY pseudo-console. The process

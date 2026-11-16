@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <RootNamespace>ClaudeSessions.Conversations</RootNamespace>
+    <AssemblyName>Conversations</AssemblyName>
+    <ApplicationIcon>Assets/Conversations.ico</ApplicationIcon>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <Resource Include="Assets/Conversations.ico" />
+    <ProjectReference Include="../ClaudeSessions.Core/ClaudeSessions.Core.csproj" />
+    <ProjectReference Include="../ClaudeSessions.Adapters/ClaudeSessions.Adapters.csproj" />
+    <ProjectReference Include="../ClaudeSessions.Ui/ClaudeSessions.Ui.csproj" />
+  </ItemGroup>
+</Project>

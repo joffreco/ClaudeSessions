@@ -1,8 +1,8 @@
 using System.Windows;
 using ClaudeSessions.Adapters.Consignes.Markdown;
 using ClaudeSessions.Consignes.Hosting;
-using ClaudeSessions.Consignes.Interfaces;
 using ClaudeSessions.Core.Consignes.Domain;
+using ClaudeSessions.Ui;
 
 namespace ClaudeSessions.Consignes.Views;
 
@@ -10,7 +10,7 @@ namespace ClaudeSessions.Consignes.Views;
 /// <param name="controller">What keeps the reading state and reaches the session.</param>
 /// <param name="key">The consigne shown.</param>
 /// <param name="owner">The window that owns the messages.</param>
-internal sealed class ShownConsigneActions(BoardController controller, ConsigneKey key, Window owner) : IConsigneActions
+internal sealed class ShownConsigneActions(BoardController controller, ConsigneKey key, Window owner) : IMarkdownActions
 {
     private const string Title = "Consignes";
 

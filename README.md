@@ -10,6 +10,8 @@ The terminal is the Windows Terminal WPF control (same renderer as Windows Termi
 
 A second executable, `Consignes.exe`, ships in the same folder: it shows the step-by-step instructions (consignes) that Claude Code sessions deposit for you, grouped by tab (see [Consignes](#consignes)). It has no installer or update of its own; both go through ClaudeSessions.
 
+A third executable, `Conversations.exe` (trial), shows the conversation of each tab as a chat, read from the session transcripts, with a field to write to the session; ClaudeSessions types what is written there into the tab (see [Conversations](#conversations)).
+
 ## Current Behavior Summary
 
 | Action | Behavior |
@@ -134,6 +136,37 @@ Ticks made while no `wait` runs are not lost: the next `wait` gives them at once
 
 A line `<!-- result: <name> -->` (name `a-z0-9-`; without a name the field is `resultat-<n>`) becomes a field where you paste what the session asked for, then click **Envoyer à la session**. The app appends `{"kind":"result","name":…,"text":…,"at":…}` to the same `<id>.events.jsonl`, and `wait` prints `Résultat « <name> » collé :` followed by the text. Sending again sends the new text. A field counts in `callbacks:`, so the session's `wait` is already running.
 
+## Conversations
+
+`Conversations.exe` (trial) is laid out as Consignes: a ☰ menu and the tabs of the open ClaudeSessions windows on the left, grouped by window; on the right the selected tab's conversation, read in a column centered in the window with the field under it, as in the Claude app, your messages in rounded bubbles against its right edge (the last one stays pinned at the top, three lines at most, once it scrolled out; a click goes back to it), the replies rendered in Markdown as in Consignes (a **Copier** button on each code block), the reasoning and the tool calls folded (« 3 outils : Bash, Read »), commands, command output, and the compaction mark. It is started from its Start menu shortcut; a second launch brings the running one to the front.
+
+The field at the bottom writes to the tab's session: `Enter` sends, `Shift+Enter` starts a new line, and each tab keeps its own draft. Conversations hands the message to ClaudeSessions through a local named pipe of the current user (`ClaudeSessions.Commands`), and ClaudeSessions types it into the tab's terminal as a bracketed paste, then presses Enter. Nothing is sent while the session asks for an approval, since Enter would answer it; nor to a tab whose session does not run (asleep, or not shown since ClaudeSessions started). The line under the field tells what happened. Approvals, `/rewind` and the other menus of Claude Code stay in ClaudeSessions.
+
+**Nouvelle fenêtre**, next to ☰, asks ClaudeSessions for a new window with one tab in the default folder; a right click on a window of the list offers **Nouvel onglet dans cette fenêtre**, in the folder of its selected tab. The new tab is selected in Conversations as soon as ClaudeSessions saves it, within 3 seconds. These go through the same pipe, `ClaudeSessions.Commands`.
+
+A message appears at once in grey, marked as being sent, until Claude Code writes it to the transcript (at the start of the turn, or at the end of the current one when the session is busy); the view reads the transcript every 250 ms for a few seconds after a send. The final response of each turn, the text after the last tool call, is set apart in a card with an accent rule and the time the transcript gives it, with the day when it is not today; the text written between tool calls, the progress updates, is smaller and in secondary color, without a time. `Space` in the empty field turns on the voice typing of Windows (Conversations presses `Win+H` for you), as Space does in Claude Code; it stays on after a send with `Enter`, and `Space` turns it off. Windows does not tell whether voice typing listens: when it stops by itself, after a long silence, the next `Space` turns it back on; `Escape` resets the state. `Ctrl+V` or `Shift+Insert` with an image in the clipboard, image files pasted or dropped on the field, saves each image as a PNG in `~/.claude/session-images/` and shows a thumbnail above the field, with ✕ to remove it; sending adds the images' paths to the message, one per line, as Claude Code reads an image from its path, and the conversation shows the image under the message. Typing `/` opens a list of the built-in commands and of the session's skills, as Claude Code listed them to the model (`skill_listing` in the transcript), with the typed part in bold: the arrows move, `Tab` or `Enter` completes, `Escape` closes. A slash or `!` command on one line is typed key by key, since Claude Code only recognises them typed. A command that opens a menu of Claude Code (`/rewind`, `/resume`, `/config`, `/usage`, `/model` without a model, and the like) is sent, then ClaudeSessions shows the tab in front, where the menu is answered; the **Terminal** button in the header (`Ctrl+Shift+G`) does the same at any time, for a menu or a question the list does not know.
+
+The status line Claude Code shows under its input appears under the field, in the colors its command chose, each percentage drawn as a small pie (the exact value in its tooltip) and the main one of a segment, such as the dumbometer's `Smart 7%`, larger; the segment that is the session name is left out. `wsl/setup.sh` wraps the `statusLine` command already set in `~/.claude/settings.json` with `wsl/claude-sessions-statusline`, which prints exactly what that command prints and keeps a copy per session in `~/.claude/session-status/<session>.txt`, with the JSON input it received in `<session>.json`; the original command is kept in `~/.claude/session-status/command`. Without a status line command, nothing is wrapped. The file changes of Edit and Write show as in the terminal: line numbers, removed lines in red and faint, added lines in green.
+
+While Claude works, a line above the field says so, as the spinner of the terminal does: « Claude travaille · 33 s · ↓ 2,5 k jetons · Bash en cours », the time counted from the prompt, the tokens summed from the replies the transcript records (they grow block by block, not token by token), and the tool whose result is awaited. Each turn ends with its duration, « Terminé en 1 min 12 s », or « Interrompu ». In the list of tabs, a spinner marks every tab at work, and a tab whose turn ended while it was not shown in the active window turns green until it is; the taskbar button gets a green dot when the window was not active. Every tab's state comes from the end of its transcript, read every second (the last megabyte at most, then only what was added). A turn with no write for ten minutes and no tool awaited is taken as over, for a session whose process died. The orange of an approval request is not shown yet: the hook's signal goes to ClaudeSessions, which deletes it. The reasoning Claude Code kept is shown in full under a « Réflexion » label; most reasoning blocks are stored empty and are not shown.
+
+| ☰ entry | Effect |
+|---------|--------|
+| **Nouvel onglet** (`Ctrl+Shift+T`) | New tab in the window of the selected tab |
+| **Nouvelle fenêtre** (`Ctrl+Shift+N`) | New window in ClaudeSessions |
+| **Afficher le terminal** (`Ctrl+Shift+G`) | Shows the tab in front in ClaudeSessions, as the **Terminal** button |
+| **Écrire à la session** (`Ctrl+L`) | Puts the cursor in the field |
+| **Aller à un onglet…** (`Ctrl+Shift+P`) | Puts the focus on the tab list, to move with the arrows |
+| **Ouvrir le dossier de l'onglet** | Opens the tab's folder in Explorer |
+| **Ouvrir ClaudeSessions**, **Consignes** | Starts the app, or brings the running one to the front |
+| **Quitter** | Closes Conversations |
+
+`Ctrl+=` / `Ctrl+-` or `Ctrl`+wheel zoom the whole window, the tab list, the header and the field included, by steps of 10 % from 50 % to 300 %; `Ctrl+0` comes back to 100 %. The zoom is kept in `%LOCALAPPDATA%\ClaudeSessions\conversations.json`. The wheel scrolls the conversation wherever the mouse is, code blocks and tool output included, and `Page Up` / `Page Down` scroll it a page at a time wherever the focus is. A new message redraws only what changed at the end of the conversation, so the position and the unfolded blocks stay; the view follows the end only when it was already there.
+
+It reads the tabs from `workspace.json` (read only, never set aside), takes each tab's current session from the hook records so that `/clear` and `/resume` show at once, and reads the transcript `~/.claude/projects/<project>/<session>.jsonl` through `\\wsl.localhost\<distro>` every second, only what was added since the last read. The view follows the active branch: after `/rewind` and a new prompt, the abandoned replies leave the view; the history before a compaction stays, marked. The transcript format is Claude Code's own and undocumented: everything that depends on it is in `src/ClaudeSessions.Adapters/Transcripts/`, split into line syntax (`TranscriptLineParser`), branch chaining (`ActiveBranch`) and message meaning (`ConversationMapper`).
+
+Known limits of the trial: only the last 300 entries are drawn; a reply appears once written to the transcript, not word by word; a message sent while Claude Code shows one of its menus (such as `/rewind`'s) would select in that menu.
+
 ## Prerequisites
 
 - Windows 10 1809 or later, x64, with WSL and the distribution that runs Claude Code.
@@ -143,10 +176,15 @@ A line `<!-- result: <name> -->` (name `a-z0-9-`; without a name the field is `r
 ## File Location
 
 ```text
-src/, tests/                                     source (Core, Adapters, Windows, Consignes) and tests
+src/, tests/                                     source (Core, Adapters, Terminal, Ui, Windows, Consignes, Conversations) and tests
 src/ClaudeSessions.Consignes/                    the Consignes app (WPF window and hosting)
 src/ClaudeSessions.Core/Consignes/               consignes domain and application logic, no I/O
 src/ClaudeSessions.Adapters/Consignes/           consigne files, Markdown, reading state
+src/ClaudeSessions.Conversations/                the Conversations app (WPF window and hosting)
+src/ClaudeSessions.Ui/                           Markdown rendering shared by Consignes and Conversations
+src/ClaudeSessions.Terminal/                     the terminal of a tab: ConPTY process, Windows Terminal control, themes
+src/ClaudeSessions.Core/Transcripts/             conversation model and tab list, no I/O
+src/ClaudeSessions.Adapters/Transcripts/         transcript driver, read-only workspace reader, prompt pipe
 wsl/claude-sessions-tab                          launcher run in WSL for each tab
 wsl/consigne                                     the command a session runs to deposit a consigne
 wsl/claude-sessions-activity                     probe run through wsl.exe before a tab is put to sleep
@@ -154,7 +192,8 @@ wsl/tests/consigne-test.sh                       tests of wsl/consigne
 skill/consignes/SKILL.md                         Claude skill that tells sessions to deposit
 skill/breakpoint-consignes/                      Claude skill that drives a hand-test suite at a breakpoint
 icon/make_consignes_icon.py                      draws the Consignes icon
-%LOCALAPPDATA%\Programs\ClaudeSessions\          installed apps (ClaudeSessions.exe and Consignes.exe)
+icon/make_conversations_icon.py                  draws the Conversations icon
+%LOCALAPPDATA%\Programs\ClaudeSessions\          installed apps (ClaudeSessions.exe, Consignes.exe and Conversations.exe)
 %LOCALAPPDATA%\ClaudeSessions\workspace.json     windows, tabs and closed tabs; window bounds carry a `unit` (`DevicePixels`; absent means the older device-independent pixels)
 %LOCALAPPDATA%\ClaudeSessions\settings.json      settings
 %LOCALAPPDATA%\ClaudeSessions\preferences.json   zoom, lines per wheel notch and sleep delay, absent when none is set
@@ -187,6 +226,13 @@ The Consignes icon, `src/ClaudeSessions.Consignes/Assets/Consignes.ico`, is a be
 python3 icon/make_consignes_icon.py src/ClaudeSessions.Consignes/Assets/Consignes.ico
 ```
 
+The Conversations icon, `src/ClaudeSessions.Conversations/Assets/Conversations.ico`, two speech bubbles, is drawn by `icon/make_conversations_icon.py`; given a `.png` path and a size, it writes one image to look at instead:
+
+```bash
+python3 icon/make_conversations_icon.py src/ClaudeSessions.Conversations/Assets/Conversations.ico
+python3 icon/make_conversations_icon.py /tmp/preview.png 128
+```
+
 Tests and checks:
 
 ```bash
@@ -211,7 +257,7 @@ dotnet format ClaudeSessions.slnx --verify-no-changes
    powershell -ExecutionPolicy Bypass -File \\wsl.localhost\Debian\home\joff\Sources\ClaudeSessions\install.ps1
    ```
 
-   It copies `publish/` to `%LOCALAPPDATA%\Programs\ClaudeSessions`, checks that Windows lets every assembly load (`Consignes.exe --check-install`; Smart App Control blocks some unsigned builds), and creates a `Claude Sessions` and a `Consignes` shortcut in the Start menu and in `shell:startup`. `-NoStartup` skips the startup shortcuts; `-Source <folder>` installs from another folder; `-Restart` starts the app at the end, and Consignes too when it was running. A running Consignes is closed first; quit ClaudeSessions before reinstalling. The previous version is kept in `ClaudeSessions.previous` and put back if the copy fails or Windows refuses an assembly.
+   It copies `publish/` to `%LOCALAPPDATA%\Programs\ClaudeSessions`, checks that Windows lets every assembly load (`Consignes.exe --check-install`; Smart App Control blocks some unsigned builds), and creates a `Claude Sessions` and a `Consignes` shortcut in the Start menu and in `shell:startup`, and a `Conversations` shortcut in the Start menu only. `-NoStartup` skips the startup shortcuts; `-Source <folder>` installs from another folder; `-Restart` starts the app at the end, and Consignes and Conversations too when they were running. A running Consignes or Conversations is closed first; quit ClaudeSessions before reinstalling. The previous version is kept in `ClaudeSessions.previous` and put back if the copy fails or Windows refuses an assembly.
 
 ### Updating from the menu
 

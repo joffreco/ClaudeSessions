@@ -28,6 +28,17 @@ public sealed class AppSettingsTests
         Assert.Equal(@"\\wsl.localhost\Ubuntu\home\someone\.claude\consignes", folder);
     }
 
+    /// <summary>The transcripts live in Claude Code's projects folder under the WSL home.</summary>
+    [Fact]
+    public void Locates_the_transcripts_under_the_wsl_home()
+    {
+        AppSettings settings = new() { Distro = "Ubuntu", WslHome = "/home/someone/" };
+
+        string folder = settings.ProjectsDirectory;
+
+        Assert.Equal(@"\\wsl.localhost\Ubuntu\home\someone\.claude\projects", folder);
+    }
+
     /// <summary>Without a settings file the Consignes app reads its folder every two seconds.</summary>
     [Fact]
     public void Polls_the_consignes_every_two_seconds_by_default()

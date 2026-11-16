@@ -5,10 +5,10 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using ClaudeSessions.Windows.Interop;
+using ClaudeSessions.Terminal.Interop;
 using Microsoft.Win32.SafeHandles;
 
-namespace ClaudeSessions.Windows.Terminal;
+namespace ClaudeSessions.Terminal;
 
 /// <summary>A process running inside a ConPTY pseudo-console, with its output read on a background thread.</summary>
 internal sealed class PseudoConsoleProcess : IDisposable
@@ -23,7 +23,7 @@ internal sealed class PseudoConsoleProcess : IDisposable
     private readonly object _lock = new();
     private bool _disposed;
 
-    private PseudoConsoleProcess(IntPtr pseudoConsole, NativeMethods.ProcessInformation process, FileStream input, FileStream output)
+    private PseudoConsoleProcess(IntPtr pseudoConsole, ConsoleNativeMethods.ProcessInformation process, FileStream input, FileStream output)
     {
         _pseudoConsole = pseudoConsole;
         _process = process.HProcess;
@@ -48,7 +48,7 @@ internal sealed class PseudoConsoleProcess : IDisposable
     {
         CreatePipeOrThrow(out SafeFileHandle consoleInput, out SafeFileHandle inputWriter);
         CreatePipeOrThrow(out SafeFileHandle outputReader, out SafeFileHandle consoleOutput);
-        int result = NativeMethods.CreatePseudoConsole(SizeOf(columns, rows), consoleInput, consoleOutput, 0, out IntPtr pseudoConsole);
+        int result = ConsoleNativeMethods.CreatePseudoConsole(SizeOf(columns, rows), consoleInput, consoleOutput, 0, out IntPtr pseudoConsole);
         consoleInput.Dispose();
         consoleOutput.Dispose();
         if (result != 0)
@@ -59,7 +59,7 @@ internal sealed class PseudoConsoleProcess : IDisposable
         }
         try
         {
-            NativeMethods.ProcessInformation process = CreateProcessIn(pseudoConsole, commandLine);
+            ConsoleNativeMethods.ProcessInformation process = CreateProcessIn(pseudoConsole, commandLine);
             return new PseudoConsoleProcess(
                 pseudoConsole,
                 process,
@@ -68,7 +68,7 @@ internal sealed class PseudoConsoleProcess : IDisposable
         }
         catch
         {
-            NativeMethods.ClosePseudoConsole(pseudoConsole);
+            ConsoleNativeMethods.ClosePseudoConsole(pseudoConsole);
             inputWriter.Dispose();
             outputReader.Dispose();
             throw;
@@ -113,7 +113,7 @@ internal sealed class PseudoConsoleProcess : IDisposable
         {
             if (!_disposed)
             {
-                _ = NativeMethods.ResizePseudoConsole(_pseudoConsole, SizeOf(columns, rows));
+                _ = ConsoleNativeMethods.ResizePseudoConsole(_pseudoConsole, SizeOf(columns, rows));
             }
         }
     }
@@ -131,9 +131,9 @@ internal sealed class PseudoConsoleProcess : IDisposable
         }
         OutputReceived = null;
         Exited = null;
-        _ = NativeMethods.TerminateProcess(_process, NativeMethods.TerminatedExitCode);
+        _ = ConsoleNativeMethods.TerminateProcess(_process, ConsoleNativeMethods.TerminatedExitCode);
         IntPtr pseudoConsole = _pseudoConsole;
-        Task.Run(() => NativeMethods.ClosePseudoConsole(pseudoConsole));
+        Task.Run(() => ConsoleNativeMethods.ClosePseudoConsole(pseudoConsole));
         _input.Dispose();
     }
 
@@ -159,8 +159,8 @@ internal sealed class PseudoConsoleProcess : IDisposable
 
     private void WaitForExit()
     {
-        _ = NativeMethods.WaitForSingleObject(_process, NativeMethods.Infinite);
-        int exitCode = NativeMethods.GetExitCodeProcess(_process, out uint code) ? unchecked((int)code) : -1;
+        _ = ConsoleNativeMethods.WaitForSingleObject(_process, ConsoleNativeMethods.Infinite);
+        int exitCode = ConsoleNativeMethods.GetExitCodeProcess(_process, out uint code) ? unchecked((int)code) : -1;
         Exited?.Invoke(exitCode);
         lock (_lock)
         {
@@ -168,48 +168,48 @@ internal sealed class PseudoConsoleProcess : IDisposable
             {
                 _disposed = true;
                 IntPtr pseudoConsole = _pseudoConsole;
-                Task.Run(() => NativeMethods.ClosePseudoConsole(pseudoConsole));
+                Task.Run(() => ConsoleNativeMethods.ClosePseudoConsole(pseudoConsole));
                 _input.Dispose();
             }
         }
-        _ = NativeMethods.CloseHandle(_thread);
-        _ = NativeMethods.CloseHandle(_process);
+        _ = ConsoleNativeMethods.CloseHandle(_thread);
+        _ = ConsoleNativeMethods.CloseHandle(_process);
     }
 
-    private static NativeMethods.ProcessInformation CreateProcessIn(IntPtr pseudoConsole, string commandLine)
+    private static ConsoleNativeMethods.ProcessInformation CreateProcessIn(IntPtr pseudoConsole, string commandLine)
     {
         IntPtr size = IntPtr.Zero;
-        _ = NativeMethods.InitializeProcThreadAttributeList(IntPtr.Zero, 1, 0, ref size);
+        _ = ConsoleNativeMethods.InitializeProcThreadAttributeList(IntPtr.Zero, 1, 0, ref size);
         IntPtr attributeList = Marshal.AllocHGlobal(size);
         try
         {
-            ThrowIfFalse(NativeMethods.InitializeProcThreadAttributeList(attributeList, 1, 0, ref size), "InitializeProcThreadAttributeList");
+            ThrowIfFalse(ConsoleNativeMethods.InitializeProcThreadAttributeList(attributeList, 1, 0, ref size), "InitializeProcThreadAttributeList");
             try
             {
                 ThrowIfFalse(
-                    NativeMethods.UpdateProcThreadAttribute(attributeList, 0, NativeMethods.ProcThreadAttributePseudoConsole, pseudoConsole, IntPtr.Size, IntPtr.Zero, IntPtr.Zero),
+                    ConsoleNativeMethods.UpdateProcThreadAttribute(attributeList, 0, ConsoleNativeMethods.ProcThreadAttributePseudoConsole, pseudoConsole, IntPtr.Size, IntPtr.Zero, IntPtr.Zero),
                     "UpdateProcThreadAttribute");
-                NativeMethods.StartupInfoEx startupInfo = new() { LpAttributeList = attributeList };
-                startupInfo.StartupInfo.Cb = Marshal.SizeOf<NativeMethods.StartupInfoEx>();
-                startupInfo.StartupInfo.DwFlags = NativeMethods.StartUseStdHandles;
+                ConsoleNativeMethods.StartupInfoEx startupInfo = new() { LpAttributeList = attributeList };
+                startupInfo.StartupInfo.Cb = Marshal.SizeOf<ConsoleNativeMethods.StartupInfoEx>();
+                startupInfo.StartupInfo.DwFlags = ConsoleNativeMethods.StartUseStdHandles;
                 ThrowIfFalse(
-                    NativeMethods.CreateProcess(
+                    ConsoleNativeMethods.CreateProcess(
                         null,
                         commandLine,
                         IntPtr.Zero,
                         IntPtr.Zero,
                         false,
-                        NativeMethods.ExtendedStartupInfoPresent | NativeMethods.CreateUnicodeEnvironment,
+                        ConsoleNativeMethods.ExtendedStartupInfoPresent | ConsoleNativeMethods.CreateUnicodeEnvironment,
                         IntPtr.Zero,
                         null,
                         ref startupInfo,
-                        out NativeMethods.ProcessInformation process),
+                        out ConsoleNativeMethods.ProcessInformation process),
                     "CreateProcess");
                 return process;
             }
             finally
             {
-                NativeMethods.DeleteProcThreadAttributeList(attributeList);
+                ConsoleNativeMethods.DeleteProcThreadAttributeList(attributeList);
             }
         }
         finally
@@ -220,7 +220,7 @@ internal sealed class PseudoConsoleProcess : IDisposable
 
     private static void CreatePipeOrThrow(out SafeFileHandle readPipe, out SafeFileHandle writePipe)
     {
-        ThrowIfFalse(NativeMethods.CreatePipe(out readPipe, out writePipe, IntPtr.Zero, 0), "CreatePipe");
+        ThrowIfFalse(ConsoleNativeMethods.CreatePipe(out readPipe, out writePipe, IntPtr.Zero, 0), "CreatePipe");
     }
 
     private static void ThrowIfFalse(bool succeeded, string call)
@@ -231,9 +231,9 @@ internal sealed class PseudoConsoleProcess : IDisposable
         }
     }
 
-    private static NativeMethods.Coord SizeOf(int columns, int rows)
+    private static ConsoleNativeMethods.Coord SizeOf(int columns, int rows)
     {
-        return new NativeMethods.Coord
+        return new ConsoleNativeMethods.Coord
         {
             X = (short)Math.Clamp(columns, 1, short.MaxValue),
             Y = (short)Math.Clamp(rows, 1, short.MaxValue),

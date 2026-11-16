@@ -1,6 +1,7 @@
 using System;
 using System.Windows;
 using ClaudeSessions.Adapters;
+using ClaudeSessions.Adapters.Transcripts;
 using ClaudeSessions.Core.Application;
 using ClaudeSessions.Windows.Views;
 using Microsoft.Win32;
@@ -14,6 +15,7 @@ internal sealed class App : Application, IDisposable
     private KeyboardRouter? _keyboard;
     private WindowCoordinator? _coordinator;
     private SessionRecordWatcher? _records;
+    private readonly SessionCommandPipe _commands = new();
 
     private App(SingleInstanceGate gate)
     {
@@ -68,6 +70,8 @@ internal sealed class App : Application, IDisposable
         _records.RecordChanged += tabId => Dispatcher.BeginInvoke(() => coordinator.OnSessionRecordChanged(tabId));
         _records.ApprovalRequested += tabId => Dispatcher.BeginInvoke(() => coordinator.OnApprovalRequested(tabId));
         _gate.ListenForActivation(() => Dispatcher.BeginInvoke(coordinator.Activate));
+        // Messages typed in Conversations, and its new windows and tabs, are carried out from here.
+        _commands.Listen(new CoordinatorCommands(Dispatcher, coordinator));
         SystemEvents.SessionSwitch += OnSessionSwitch;
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
     }
@@ -104,9 +108,10 @@ internal sealed class App : Application, IDisposable
         base.OnSessionEnding(e);
     }
 
-    /// <summary>Stops the keyboard routing, the session switch and theme listening and the watching of the hook records.</summary>
+    /// <summary>Stops the keyboard routing, the session switch and theme listening, the watching of the hook records and the command channel.</summary>
     public void Dispose()
     {
+        _commands.Dispose();
         SystemEvents.SessionSwitch -= OnSessionSwitch;
         SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
         _keyboard?.Dispose();

@@ -10,14 +10,15 @@
 ## Stack
 - Language: C# latest, .NET 10; Core and Adapters target net10.0, Windows app targets net10.0-windows WPF (src/*/*.csproj)
 - Terminal: Windows Terminal WPF control from the unofficial CI.Microsoft.Terminal.Wpf package, connected through ConPTY (README.md, restore-terminal-control.sh)
-- Packages: Microsoft.Windows.Console.ConPTY 1.25.260930003 (src/ClaudeSessions.Windows/ClaudeSessions.Windows.csproj)
+- Packages: Microsoft.Windows.Console.ConPTY 1.25.260930003 (src/ClaudeSessions.Terminal/ClaudeSessions.Terminal.csproj)
 - Build rules: nullable enabled, warnings as errors, code style enforced, lock files required (Directory.Build.props)
 - Tests: xUnit 2.9.2, Microsoft.Extensions.TimeProvider.Testing (tests/ClaudeSessions.Tests/ClaudeSessions.Tests.csproj)
 
 ## Structure
 - src/ClaudeSessions.Core: domain (Workspace, SessionWindow, SessionTab, ClosedTab, ids) and services (workspace, sync, zoom, wheel scroll) (src/ClaudeSessions.Core)
 - src/ClaudeSessions.Adapters: JSON stores, settings file, hook record reader, OSC title parser, WSL command line, DTOs (src/ClaudeSessions.Adapters)
-- src/ClaudeSessions.Windows: WPF hosting, keyboard router, single-instance gate, ConPTY terminal, views (src/ClaudeSessions.Windows)
+- src/ClaudeSessions.Terminal: the terminal of a tab, ConPTY process and Windows Terminal control, shared by the apps that host sessions (src/ClaudeSessions.Terminal)
+- src/ClaudeSessions.Windows: WPF hosting, keyboard router, single-instance gate, views (src/ClaudeSessions.Windows)
 - tests/ClaudeSessions.Tests: unit tests for Core and Adapters with in-memory fakes (tests/ClaudeSessions.Tests)
 - wsl/: per-tab launcher, SessionStart hook and one-command setup script (wsl/claude-sessions-tab, wsl/claude-sessions-hook.sh, wsl/setup.sh)
 - icon/: Python script drawing the .ico from pixel grids (icon/make_icon.py)

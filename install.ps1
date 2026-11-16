@@ -3,11 +3,12 @@
 Installs claude-sessions for the current Windows user.
 
 .DESCRIPTION
-Copies the published apps, ClaudeSessions and Consignes, to %LOCALAPPDATA%\Programs\ClaudeSessions,
-checks that Windows lets every assembly of the new version load (Smart App Control blocks some
-unsigned builds), then creates Start menu shortcuts and, unless -NoStartup is given, shortcuts in
-shell:startup so the windows come back at every logon. Run it from Windows PowerShell after
-./publish.sh has run in WSL. A running Consignes is closed first and started again with -Restart.
+Copies the published apps, ClaudeSessions, Consignes and Conversations, to
+%LOCALAPPDATA%\Programs\ClaudeSessions, checks that Windows lets every assembly of the new version
+load (Smart App Control blocks some unsigned builds), then creates Start menu shortcuts and, unless
+-NoStartup is given, shortcuts in shell:startup for ClaudeSessions and Consignes so the windows come
+back at every logon. Run it from Windows PowerShell after ./publish.sh has run in WSL. A running
+Consignes or Conversations is closed first and started again with -Restart.
 
 The previous version is kept in ClaudeSessions.previous and put back if the copy fails or Windows
 refuses an assembly of the new version. When the
@@ -43,28 +44,32 @@ $target = Join-Path $env:LOCALAPPDATA 'Programs\ClaudeSessions'
 $backup = "$target.previous"
 $exe = Join-Path $target 'ClaudeSessions.exe'
 $consignesExe = Join-Path $target 'Consignes.exe'
+$conversationsExe = Join-Path $target 'Conversations.exe'
 $updating = $WaitForProcess -gt 0
 $consignesWasRunning = $false
+$conversationsWasRunning = $false
 
 function Get-AppProcesses {
     # The app and the OpenConsole.exe of its tabs, which run from the installation folder.
     Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith("$target\", [StringComparison]::OrdinalIgnoreCase) }
 }
 
-function Stop-Consignes {
-    # Consignes holds no work that a close loses; it is closed so that its files can be replaced.
-    $running = @(Get-Process -Name 'Consignes' -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith("$target\", [StringComparison]::OrdinalIgnoreCase) })
+function Stop-Companion([string]$Name) {
+    # Consignes and Conversations hold no work that a close loses; they are closed so that their files can be replaced.
+    # Returns whether one was running.
+    $running = @(Get-Process -Name $Name -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith("$target\", [StringComparison]::OrdinalIgnoreCase) })
     foreach ($process in $running) {
-        $script:consignesWasRunning = $true
         [void]$process.CloseMainWindow()
         if (-not $process.WaitForExit(10000)) {
-            throw "Consignes (process $($process.Id)) did not close within 10 seconds."
+            throw "$Name (process $($process.Id)) did not close within 10 seconds."
         }
     }
+    return $running.Count -gt 0
 }
 
 function Wait-App {
-    Stop-Consignes
+    $script:consignesWasRunning = Stop-Companion 'Consignes'
+    $script:conversationsWasRunning = Stop-Companion 'Conversations'
     if ($updating) {
         $running = Get-Process -Id $WaitForProcess -ErrorAction SilentlyContinue
         if ($running -and -not $running.WaitForExit(60000)) {
@@ -132,7 +137,12 @@ function Write-Shortcuts {
         $shortcuts += [Environment]::GetFolderPath('Startup')
     }
     foreach ($folder in $shortcuts) {
-        foreach ($app in @(@{ Name = 'Claude Sessions.lnk'; Exe = $exe }, @{ Name = 'Consignes.lnk'; Exe = $consignesExe })) {
+        $apps = @(@{ Name = 'Claude Sessions.lnk'; Exe = $exe }, @{ Name = 'Consignes.lnk'; Exe = $consignesExe })
+        if ($folder -eq [Environment]::GetFolderPath('Programs')) {
+            # Conversations is opened on demand, never at logon.
+            $apps += @{ Name = 'Conversations.lnk'; Exe = $conversationsExe }
+        }
+        foreach ($app in $apps) {
             $path = Join-Path $folder $app.Name
             if ($updating -and ((Test-Path $path) -or -not (Test-Path (Join-Path $folder 'Claude Sessions.lnk')))) {
                 continue
@@ -146,7 +156,7 @@ function Write-Shortcuts {
 }
 
 function Install-App {
-    foreach ($file in @('ClaudeSessions.exe', 'Consignes.exe')) {
+    foreach ($file in @('ClaudeSessions.exe', 'Consignes.exe', 'Conversations.exe')) {
         if (-not (Test-Path (Join-Path $Source $file))) {
             throw "$file not found in $Source. Run ./publish.sh in WSL first."
         }
@@ -176,6 +186,9 @@ if ($Restart -and (Test-Path $exe)) {
 }
 if ($Restart -and $consignesWasRunning -and (Test-Path $consignesExe)) {
     Start-Process -FilePath $consignesExe -WorkingDirectory $target
+}
+if ($Restart -and $conversationsWasRunning -and (Test-Path $conversationsExe)) {
+    Start-Process -FilePath $conversationsExe -WorkingDirectory $target
 }
 
 if ($failure) {

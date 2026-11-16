@@ -1,9 +1,9 @@
 using ClaudeSessions.Adapters.Consignes.Markdown;
 
-namespace ClaudeSessions.Consignes.Interfaces;
+namespace ClaudeSessions.Ui;
 
-/// <summary>What the user can do in the consigne shown: tick its tasks and send results from its fields.</summary>
-public interface IConsigneActions
+/// <summary>What the user can do in a drawn Markdown document: tick its tasks and send results from its fields.</summary>
+public interface IMarkdownActions
 {
     /// <summary>Tells whether a task is ticked.</summary>
     /// <param name="index">The task's position.</param>
